@@ -1,14 +1,18 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { db } from "@/lib/db";
 
-const secretKey = process.env.STRIPE_SECRET_KEY;
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
 
-if (!secretKey) {
-  throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  if (!secretKey) {
+    throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  }
+
+  return new Stripe(secretKey);
 }
-
-const stripe = new Stripe(secretKey);
 
 function makePedidoId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -23,6 +27,8 @@ function norm(v: any) {
 
 export async function POST(req: Request) {
   try {
+    const stripe = getStripe();
+
     const body = await req.json().catch(() => ({}));
 
     const servicoId = Number(body?.servico_id ?? 0);
@@ -59,7 +65,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!process.env.NEXT_PUBLIC_SITE_URL) {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
+    if (!siteUrl) {
       return NextResponse.json(
         { ok: false, error: "Falta NEXT_PUBLIC_SITE_URL no .env.local" },
         { status: 500 }
@@ -126,11 +134,11 @@ export async function POST(req: Request) {
     );
 
     const successUrl =
-      `${process.env.NEXT_PUBLIC_SITE_URL}/loja/${servicoId}` +
+      `${siteUrl}/loja/${servicoId}` +
       `?payment=success&pedido=${pedidoId}&session_id={CHECKOUT_SESSION_ID}`;
 
     const cancelUrl =
-      `${process.env.NEXT_PUBLIC_SITE_URL}/loja/${servicoId}` +
+      `${siteUrl}/loja/${servicoId}` +
       `?payment=cancel&pedido=${pedidoId}`;
 
     const session = await stripe.checkout.sessions.create({
