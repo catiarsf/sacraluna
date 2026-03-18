@@ -1,15 +1,19 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import db, { creditWallet } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 
-const secretKey = process.env.STRIPE_SECRET_KEY;
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
 
-if (!secretKey) {
-  throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  if (!secretKey) {
+    throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  }
+
+  return new Stripe(secretKey);
 }
-
-const stripe = new Stripe(secretKey);
 
 function norm(v: any) {
   return String(v ?? "").trim();
@@ -55,6 +59,7 @@ function ensureWallet(userType: string, userId: number) {
 
 export async function POST(req: Request) {
   try {
+    const stripe = getStripe();
     const sessionAuth = await getSession();
 
     if (!sessionAuth?.user?.id) {
@@ -116,15 +121,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // Garante que o cliente autenticado só confirma a própria sessão
     if (Number(sessionAuth.user.id) !== userId) {
       return NextResponse.json(
-        { ok: false, error: "Esta sessão Stripe não pertence ao utilizador autenticado." },
+        {
+          ok: false,
+          error: "Esta sessão Stripe não pertence ao utilizador autenticado.",
+        },
         { status: 403 }
       );
     }
 
-    // Se ainda não estiver pago, não rebenta; devolve estado pendente
     if (checkoutSession.payment_status !== "paid") {
       return NextResponse.json({
         ok: true,
@@ -134,7 +140,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // Garante a wallet antes de creditar
     ensureWallet(userType, userId);
 
     const alreadyCredited = db
