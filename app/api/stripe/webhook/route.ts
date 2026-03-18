@@ -1,21 +1,27 @@
+export const dynamic = "force-dynamic";
+
 import Stripe from "stripe";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import db, { creditWallet } from "@/lib/db";
 
-const secretKeyEnv = process.env.STRIPE_SECRET_KEY;
-const webhookSecretEnv = process.env.STRIPE_WEBHOOK_SECRET;
+function getStripeConfig() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-if (!secretKeyEnv) {
-  throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  if (!secretKey) {
+    throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  }
+
+  if (!webhookSecret) {
+    throw new Error("Falta STRIPE_WEBHOOK_SECRET no .env.local");
+  }
+
+  return {
+    stripe: new Stripe(secretKey),
+    webhookSecret,
+  };
 }
-
-if (!webhookSecretEnv) {
-  throw new Error("Falta STRIPE_WEBHOOK_SECRET no .env.local");
-}
-
-const stripe = new Stripe(secretKeyEnv);
-const webhookSecret = webhookSecretEnv;
 
 function norm(v: any) {
   return String(v ?? "").trim();
@@ -217,7 +223,7 @@ function processWalletTopup(session: Stripe.Checkout.Session) {
   };
 }
 
-async function processRefund(refund: Stripe.Refund) {
+async function processRefund(stripe: Stripe, refund: Stripe.Refund) {
   const refundId = norm(refund.id);
   const refundAmount = round2(Number(refund.amount ?? 0) / 100);
   const paymentIntentId =
@@ -269,26 +275,28 @@ async function processRefund(refund: Stripe.Refund) {
 }
 
 export async function POST(req: Request) {
-  const body = await req.text();
-  const headersList = await headers();
-  const signature = headersList.get("stripe-signature");
-
-  if (!signature) {
-    console.error("WEBHOOK: Stripe-Signature em falta");
-    return new NextResponse("Stripe-Signature em falta", { status: 400 });
-  }
-
-  let event: Stripe.Event;
-
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-    console.log("WEBHOOK RECEBIDO:", event.type, "ID:", event.id);
-  } catch (err: any) {
-    console.error("ERRO A VALIDAR WEBHOOK:", err?.message || err);
-    return new NextResponse(`Webhook error: ${err.message}`, { status: 400 });
-  }
+    const { stripe, webhookSecret } = getStripeConfig();
 
-  try {
+    const body = await req.text();
+    const headersList = await headers();
+    const signature = headersList.get("stripe-signature");
+
+    if (!signature) {
+      console.error("WEBHOOK: Stripe-Signature em falta");
+      return new NextResponse("Stripe-Signature em falta", { status: 400 });
+    }
+
+    let event: Stripe.Event;
+
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      console.log("WEBHOOK RECEBIDO:", event.type, "ID:", event.id);
+    } catch (err: any) {
+      console.error("ERRO A VALIDAR WEBHOOK:", err?.message || err);
+      return new NextResponse(`Webhook error: ${err.message}`, { status: 400 });
+    }
+
     if (!event.id) {
       throw new Error("Evento Stripe sem ID.");
     }
@@ -333,7 +341,7 @@ export async function POST(req: Request) {
       console.log("REFUND PAYMENT INTENT:", refund.payment_intent);
       console.log("REFUND AMOUNT:", refund.amount);
 
-      const refundResult = await processRefund(refund);
+      const refundResult = await processRefund(stripe, refund);
 
       if (refundResult.handled) {
         console.log("RESULTADO REFUND:", refundResult);
