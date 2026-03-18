@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-type Ctx = { params: { sessionId: string } };
-
-export async function GET(_req: Request, ctx: Ctx) {
+export async function GET(
+  _req: Request,
+  { params }: { params: { sessionId: string } }
+) {
   try {
-    const sessionId = String(ctx.params.sessionId || "").trim();
+    const sessionId = String(params.sessionId || "").trim();
+
     if (!sessionId) {
-      return NextResponse.json({ ok: false, error: "sessionId inválido" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "sessionId inválido" },
+        { status: 400 }
+      );
     }
 
     const rows = db
@@ -25,7 +30,11 @@ export async function GET(_req: Request, ctx: Ctx) {
     return NextResponse.json({ ok: true, messages: rows });
   } catch (err: any) {
     return NextResponse.json(
-      { ok: false, error: "Erro ao carregar mensagens", detail: String(err?.message ?? err) },
+      {
+        ok: false,
+        error: "Erro ao carregar mensagens",
+        detail: String(err?.message ?? err),
+      },
       { status: 500 }
     );
   }
