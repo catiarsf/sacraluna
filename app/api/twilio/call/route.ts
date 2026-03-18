@@ -1,33 +1,37 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import Twilio from "twilio";
 import db from "@/lib/db";
 import { getSession } from "@/lib/auth";
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID!;
-const authToken = process.env.TWILIO_AUTH_TOKEN!;
-const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER!;
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
+function getTwilioConfig() {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
-if (!accountSid) {
-  throw new Error("Falta TWILIO_ACCOUNT_SID no .env.local");
-}
+  if (!accountSid) {
+    throw new Error("Falta TWILIO_ACCOUNT_SID no .env.local");
+  }
 
-if (!authToken) {
-  throw new Error("Falta TWILIO_AUTH_TOKEN no .env.local");
-}
+  if (!authToken) {
+    throw new Error("Falta TWILIO_AUTH_TOKEN no .env.local");
+  }
 
-if (!twilioPhoneNumber) {
-  throw new Error("Falta TWILIO_PHONE_NUMBER no .env.local");
-}
+  if (!twilioPhoneNumber) {
+    throw new Error("Falta TWILIO_PHONE_NUMBER no .env.local");
+  }
 
-if (!siteUrl) {
-  throw new Error("Falta NEXT_PUBLIC_SITE_URL no .env.local");
-}
+  if (!siteUrl) {
+    throw new Error("Falta NEXT_PUBLIC_SITE_URL no .env.local");
+  }
 
-const client = Twilio(accountSid, authToken);
-
-function norm(v: any) {
-  return String(v ?? "").trim();
+  return {
+    client: Twilio(accountSid, authToken),
+    twilioPhoneNumber,
+    siteUrl,
+  };
 }
 
 function toNumber(v: any) {
@@ -37,8 +41,8 @@ function toNumber(v: any) {
 
 export async function POST(req: Request) {
   try {
+    const { client, twilioPhoneNumber, siteUrl } = getTwilioConfig();
 
-    // VERIFICA LOGIN
     const session = await getSession();
 
     if (!session?.user?.id) {
@@ -48,7 +52,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // APENAS CLIENTES
     if (session.user.role !== "cliente") {
       return NextResponse.json(
         { ok: false, error: "Só clientes podem iniciar chamadas." },
@@ -66,11 +69,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // CLIENTE
     const cliente = db.prepare(`
-        SELECT id, nome, telefone
-        FROM users
-        WHERE id = ?
+      SELECT id, nome, telefone
+      FROM users
+      WHERE id = ?
     `).get(session.user.id) as any;
 
     if (!cliente) {
@@ -94,9 +96,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // CONSULTOR
     const consultor = db.prepare(`
-        SELECT
+      SELECT
         id,
         nome,
         telefone,
@@ -105,8 +106,8 @@ export async function POST(req: Request) {
         ocupado,
         preco_voz,
         preco_por_min
-        FROM consultores
-        WHERE id = ?
+      FROM consultores
+      WHERE id = ?
     `).get(consultorId) as any;
 
     if (!consultor) {
@@ -155,16 +156,14 @@ export async function POST(req: Request) {
       );
     }
 
-    // WALLET
     const wallet = db.prepare(`
-        SELECT balance_eur
-        FROM wallets
-        WHERE user_type='cliente' AND user_id=?
+      SELECT balance_eur
+      FROM wallets
+      WHERE user_type='cliente' AND user_id=?
     `).get(session.user.id) as any;
 
     const saldo = Number(wallet?.balance_eur ?? 0);
 
-    // SALDO PARA 1 MINUTO
     if (saldo < precoVoz) {
       return NextResponse.json(
         {
@@ -176,7 +175,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // TWILIO CONNECT
     const connectUrl =
       `${siteUrl}/api/twilio/connect` +
       `?consultorId=${consultorId}` +
@@ -194,9 +192,7 @@ export async function POST(req: Request) {
       sid: call.sid,
       message: "A chamada está a ser iniciada. Atende o teu telemóvel.",
     });
-
   } catch (e: any) {
-
     console.error("ERRO TWILIO CALL:", e);
 
     return NextResponse.json(
