@@ -1,17 +1,22 @@
 export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const secretKey = process.env.STRIPE_SECRET_KEY;
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
 
-if (!secretKey) {
-  throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  if (!secretKey) {
+    throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  }
+
+  return new Stripe(secretKey);
 }
-
-const stripe = new Stripe(secretKey);
 
 export async function POST(req: Request) {
   try {
+    const stripe = getStripe();
+
     const body = await req.json().catch(() => ({}));
 
     const pedido_id = String(body?.pedido_id ?? "").trim();
@@ -39,7 +44,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!process.env.NEXT_PUBLIC_SITE_URL) {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
+    if (!siteUrl) {
       return NextResponse.json(
         { ok: false, error: "Falta NEXT_PUBLIC_SITE_URL no .env.local" },
         { status: 500 }
@@ -65,8 +72,8 @@ export async function POST(req: Request) {
         pedido_id,
         consultor_id: String(consultor_id),
       },
-     success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/perguntas/pedido/${pedido_id}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/email/${consultor_id}`,
+      success_url: `${siteUrl}/perguntas/pedido/${pedido_id}`,
+      cancel_url: `${siteUrl}/email/${consultor_id}`,
     });
 
     return NextResponse.json({

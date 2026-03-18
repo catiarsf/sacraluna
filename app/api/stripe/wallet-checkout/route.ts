@@ -1,19 +1,17 @@
 export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const secretKey = process.env.STRIPE_SECRET_KEY;
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
 
-if (!secretKey) {
-  throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  if (!secretKey) {
+    throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  }
+
+  return new Stripe(secretKey);
 }
-
-if (!siteUrl) {
-  throw new Error("Falta NEXT_PUBLIC_SITE_URL no .env.local");
-}
-
-const stripe = new Stripe(secretKey);
 
 function norm(v: any) {
   return String(v ?? "").trim();
@@ -26,6 +24,16 @@ function toNumber(v: any) {
 
 export async function POST(req: Request) {
   try {
+    const stripe = getStripe();
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
+    if (!siteUrl) {
+      return NextResponse.json(
+        { ok: false, error: "Falta NEXT_PUBLIC_SITE_URL no .env.local" },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
 
     const userType = norm(body?.userType);
