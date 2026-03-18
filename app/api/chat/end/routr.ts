@@ -1,0 +1,93 @@
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { getSession } from "@/lib/auth";
+
+export async function POST(req: Request) {
+  try {
+    const authSession = await getSession();
+    const user = authSession.user;
+
+    if (!user || !user.id) {
+      return NextResponse.json(
+        { ok: false, error: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const sessionId = String(body?.session_id ?? "").trim();
+
+    if (!sessionId) {
+      return NextResponse.json(
+        { ok: false, error: "Sessão inválida." },
+        { status: 400 }
+      );
+    }
+
+    const row = db
+      .prepare(
+        `
+        SELECT id, cliente_id, consultor_id, status
+        FROM chat_sessions
+        WHERE id = ?
+        `
+      )
+      .get(sessionId) as any;
+
+    if (!row) {
+      return NextResponse.json(
+        { ok: false, error: "Sessão não encontrada." },
+        { status: 404 }
+      );
+    }
+
+    if (Number(row.cliente_id) !== Number(user.id)) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão." },
+        { status: 403 }
+      );
+    }
+
+    if (row.status === "ended") {
+      return NextResponse.json({
+        ok: true,
+        already_ended: true,
+      });
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+
+    db.transaction(() => {
+      db.prepare(
+        `
+        UPDATE chat_sessions
+        SET status = 'ended',
+            ended_at = ?
+        WHERE id = ?
+        `
+      ).run(now, sessionId);
+
+      db.prepare(
+        `
+        UPDATE consultores
+        SET ocupado = 0,
+            last_seen_at = ?
+        WHERE id = ?
+        `
+      ).run(now, row.consultor_id);
+    })();
+
+    return NextResponse.json({
+      ok: true,
+      session_id: sessionId,
+      status: "ended",
+    });
+  } catch (e: any) {
+    console.error("ERRO /api/chat/end:", e);
+
+    return NextResponse.json(
+      { ok: false, error: e?.message || "Erro interno do servidor." },
+      { status: 500 }
+    );
+  }
+}
