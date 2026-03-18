@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { sessionId: string } }
-) {
-  try {
-    const sessionId = String(params.sessionId || "").trim();
+type Ctx = {
+  params: Promise<{ sessionId: string }>;
+};
 
-    if (!sessionId) {
+export async function GET(_req: Request, context: Ctx) {
+  try {
+    const { sessionId } = await context.params;
+    const id = String(sessionId || "").trim();
+
+    if (!id) {
       return NextResponse.json(
         { ok: false, error: "sessionId inválido" },
         { status: 400 }
@@ -25,7 +27,7 @@ export async function GET(
         LIMIT 200
         `
       )
-      .all(sessionId);
+      .all(id);
 
     return NextResponse.json({ ok: true, messages: rows });
   } catch (err: any) {
