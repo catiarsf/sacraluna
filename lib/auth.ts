@@ -16,27 +16,31 @@ export type SessionData = {
   user?: SessionUser;
 };
 
-const sessionPassword = process.env.SESSION_PASSWORD;
+function getSessionOptions(): SessionOptions {
+  const sessionPassword = process.env.SESSION_PASSWORD;
 
-if (!sessionPassword || sessionPassword.length < 32) {
-  throw new Error(
-    "SESSION_PASSWORD em falta ou demasiado curta. Usa uma password com pelo menos 32 caracteres no .env.local"
-  );
+  if (!sessionPassword || sessionPassword.length < 32) {
+    throw new Error(
+      "SESSION_PASSWORD em falta ou demasiado curta. Usa uma password com pelo menos 32 caracteres no .env.local"
+    );
+  }
+
+  return {
+    cookieName: "sacraluna_session",
+    password: sessionPassword,
+    cookieOptions: {
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      httpOnly: true,
+    },
+  };
 }
-
-const sessionOptions: SessionOptions = {
-  cookieName: "sacraluna_session",
-  password: sessionPassword,
-  cookieOptions: {
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    httpOnly: true,
-  },
-};
 
 export async function getSession() {
   const cookieStore = await cookies();
+  const sessionOptions = getSessionOptions();
+
   return getIronSession<SessionData>(cookieStore as any, sessionOptions);
 }
 
