@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const consultor = db
       .prepare(
         `
-        SELECT id, nome, email, password, ativo
+        SELECT id, nome, email, password, ativo, role
         FROM consultores
         WHERE lower(email) = ?
         LIMIT 1
@@ -47,12 +47,15 @@ export async function POST(req: Request) {
       );
     }
 
+    const role = String(consultor.role ?? "consultor");
+
     const res = NextResponse.json({
       ok: true,
       consultor: {
         id: Number(consultor.id),
         nome: String(consultor.nome ?? ""),
         email: String(consultor.email ?? ""),
+        role,
       },
     });
 
@@ -65,6 +68,14 @@ export async function POST(req: Request) {
     });
 
     res.cookies.set("consultor_nome", String(consultor.nome ?? ""), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+
+    res.cookies.set("consultor_role", role, {
       httpOnly: true,
       sameSite: "lax",
       secure: false,
