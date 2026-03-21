@@ -38,34 +38,49 @@ export async function POST(req: Request) {
 
     if (!consultor) {
       return NextResponse.json(
-        { ok: false, error: "Credenciais inválidas." },
+        { ok: false, error: "Consultor não encontrado para este email." },
         { status: 401 }
       );
     }
 
-    let passwordOk = false;
-
-    // Tenta bcrypt primeiro; se falhar, compara texto simples
+    let bcryptOk = false;
     try {
-      passwordOk = await bcrypt.compare(password, String(consultor.password ?? ""));
+      bcryptOk = await bcrypt.compare(password, String(consultor.password ?? ""));
     } catch {
-      passwordOk = false;
+      bcryptOk = false;
     }
 
-    if (!passwordOk) {
-      passwordOk = String(consultor.password ?? "") === password;
-    }
+    const plainOk = String(consultor.password ?? "") === password;
+    const passwordOk = bcryptOk || plainOk;
 
     if (!passwordOk) {
       return NextResponse.json(
-        { ok: false, error: "Credenciais inválidas." },
+        {
+          ok: false,
+          error: "Password inválida.",
+          debug: {
+            emailEncontrado: consultor.email,
+            ativo: consultor.ativo,
+            role: consultor.role,
+            bcryptOk,
+            plainOk,
+          },
+        },
         { status: 401 }
       );
     }
 
     if (Number(consultor.ativo ?? 0) !== 1) {
       return NextResponse.json(
-        { ok: false, error: "Este consultor está inativo." },
+        {
+          ok: false,
+          error: "Este consultor está inativo.",
+          debug: {
+            emailEncontrado: consultor.email,
+            ativo: consultor.ativo,
+            role: consultor.role,
+          },
+        },
         { status: 403 }
       );
     }
