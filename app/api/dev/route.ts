@@ -3,28 +3,33 @@ import db from "@/lib/db";
 
 export async function GET() {
   try {
-    // cria coluna role se não existir
-    try {
-      db.prepare(`
-        ALTER TABLE consultores ADD COLUMN role TEXT DEFAULT 'consultor'
-      `).run();
-    } catch {}
+    // cria ou atualiza o teu utilizador
+    const existing = db.prepare(`
+      SELECT id FROM consultores WHERE email = ?
+    `).get("tarotemagia8@gmail.com");
 
-    // insere ou substitui consultor admin
-    db.prepare(`
-      INSERT INTO consultores (nome, email, password, ativo, role)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(
-      "Raquel",
-      "tarotemagia8@gmail.com",
-      "123456", // 🔴 mete aqui a password que queres usar
-      1,
-      "admin"
-    );
+    if (existing) {
+      db.prepare(`
+        UPDATE consultores
+        SET password = ?, ativo = 1, role = 'admin'
+        WHERE email = ?
+      `).run("123456", "tarotemagia8@gmail.com");
+    } else {
+      db.prepare(`
+        INSERT INTO consultores (nome, email, password, ativo, role)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        "Raquel",
+        "tarotemagia8@gmail.com",
+        "123456",
+        1,
+        "admin"
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      message: "Consultor admin criado!",
+      message: "Consultor admin pronto!",
     });
   } catch (e: any) {
     return NextResponse.json({
