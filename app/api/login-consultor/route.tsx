@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 
 export async function POST(req: Request) {
@@ -6,7 +7,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
 
     const email = String(body?.email ?? "").trim().toLowerCase();
-    const password = String(body?.password ?? "").trim();
+    const password = String(body?.password ?? "");
 
     if (!email || !password) {
       return NextResponse.json(
@@ -24,7 +25,16 @@ export async function POST(req: Request) {
         LIMIT 1
         `
       )
-      .get(email) as any;
+      .get(email) as
+      | {
+          id: number;
+          nome: string;
+          email: string;
+          password: string;
+          ativo: number;
+          role: string | null;
+        }
+      | undefined;
 
     if (!consultor) {
       return NextResponse.json(
@@ -33,7 +43,20 @@ export async function POST(req: Request) {
       );
     }
 
-    if (String(consultor.password ?? "") !== password) {
+    let passwordOk = false;
+
+    // Tenta bcrypt primeiro; se falhar, compara texto simples
+    try {
+      passwordOk = await bcrypt.compare(password, String(consultor.password ?? ""));
+    } catch {
+      passwordOk = false;
+    }
+
+    if (!passwordOk) {
+      passwordOk = String(consultor.password ?? "") === password;
+    }
+
+    if (!passwordOk) {
       return NextResponse.json(
         { ok: false, error: "Credenciais inválidas." },
         { status: 401 }
@@ -59,10 +82,12 @@ export async function POST(req: Request) {
       },
     });
 
+    const isProd = process.env.NODE_ENV === "production";
+
     res.cookies.set("consultor_id", String(consultor.id), {
       httpOnly: true,
       sameSite: "lax",
-      secure: false,
+      secure: isProd,
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
     });
@@ -70,7 +95,7 @@ export async function POST(req: Request) {
     res.cookies.set("consultor_nome", String(consultor.nome ?? ""), {
       httpOnly: true,
       sameSite: "lax",
-      secure: false,
+      secure: isProd,
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
     });
@@ -78,7 +103,7 @@ export async function POST(req: Request) {
     res.cookies.set("consultor_role", role, {
       httpOnly: true,
       sameSite: "lax",
-      secure: false,
+      secure: isProd,
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
     });
