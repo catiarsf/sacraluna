@@ -46,6 +46,21 @@ export default function ChatPage() {
 
   const sessionId = useMemo(() => sp.get("session") || "", [sp]);
 
+  const socketBaseUrl = useMemo(() => {
+    const fromEnv =
+      process.env.NEXT_PUBLIC_SOCKET_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      "";
+
+    if (fromEnv) return fromEnv;
+
+    if (typeof window !== "undefined") {
+      return window.location.origin;
+    }
+
+    return "";
+  }, []);
+
   const [connected, setConnected] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -190,22 +205,28 @@ export default function ChatPage() {
 
     carregarInfo();
   }, [consultorId, router, sessionId, role]);
-
-  useEffect(() => {
+ useEffect(() => {
     if (!sessionId) return;
 
     setErr(null);
+
+    if (!socketBaseUrl) {
+      setErr("URL do servidor realtime em falta.");
+      return;
+    }
 
     if (sockRef.current) {
       sockRef.current.disconnect();
       sockRef.current = null;
     }
 
-    const socket = io("http://localhost:3001", {
-      transports: ["websocket"],
+    const socket = io(socketBaseUrl, {
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 10,
       timeout: 8000,
+      withCredentials: true,
     });
 
     sockRef.current = socket;
@@ -231,9 +252,13 @@ export default function ChatPage() {
       setConnected(false);
     });
 
-    socket.on("connect_error", () => {
+    socket.on("connect_error", (error: any) => {
       setConnected(false);
-      setErr("Não consegui ligar ao servidor do chat (porta 3001).");
+      setErr(
+        error?.message
+          ? `Não consegui ligar ao servidor do chat: ${error.message}`
+          : "Não consegui ligar ao servidor do chat."
+      );
     });
 
     socket.on("msg", (m: any) => {
@@ -290,7 +315,7 @@ export default function ChatPage() {
       socket.disconnect();
       sockRef.current = null;
     };
-  }, [sessionId, consultorId, role, router]);
+  }, [sessionId, consultorId, role, router, socketBaseUrl]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -384,7 +409,7 @@ export default function ChatPage() {
     if (!t) return;
 
     if (!sockRef.current || !connected) {
-      setErr("Sem ligação ao chat. Confirma o servidor realtime (porta 3001).");
+      setErr("Sem ligação ao chat. Confirma o servidor realtime.");
       return;
     }
 
@@ -394,7 +419,7 @@ export default function ChatPage() {
       senderRole: role,
     };
 
-    sockRef.current?.emit("msg", payload);
+    sockRef.current.emit("msg", payload);
     setText("");
   }
 
@@ -411,8 +436,7 @@ export default function ChatPage() {
       </div>
     );
   }
-
-  return (
+return (
     <div style={styles.page}>
       <div style={styles.topBar}>
         <button style={styles.navBtn} onClick={() => router.push("/")}>
@@ -533,8 +557,7 @@ export default function ChatPage() {
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
+ const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     padding: "22px 18px 30px",
@@ -638,4 +661,4 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     padding: "12px 16px",
   },
-};
+};  

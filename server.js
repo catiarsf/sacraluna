@@ -1,12 +1,20 @@
 const { Server } = require("socket.io");
 
-const io = new Server(3001, {
+const PORT = process.env.PORT || 3001;
+
+const io = new Server(PORT, {
   cors: {
-    origin: "*",
+    origin: [
+      "http://localhost:3000",
+      "https://sacraluna-production.up.railway.app",
+      "https://www.sacraluna.pt",
+    ],
+    methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
-console.log("Socket server running on port 3001");
+console.log(`Socket server running on port ${PORT}`);
 
 const roomConsultor = (consultorId) => `consultor:${consultorId}`;
 const roomSession = (sessionId) => `session:${sessionId}`;
@@ -18,7 +26,6 @@ io.on("connection", (socket) => {
     if (!consultorId) return;
 
     socket.join(roomConsultor(consultorId));
-
     console.log(`consultor ${consultorId} joined ${roomConsultor(consultorId)}`);
   });
 
@@ -26,7 +33,6 @@ io.on("connection", (socket) => {
     if (!sessionId) return;
 
     socket.join(roomSession(sessionId));
-
     console.log(`socket ${socket.id} joined ${roomSession(sessionId)}`);
   });
 
@@ -66,7 +72,7 @@ io.on("connection", (socket) => {
     console.log(`call_accept ${sessionId}`);
 
     io.to(roomSession(sessionId)).emit("call_status", {
-      sessionId,
+      sessionId: String(sessionId),
       status: "accepted",
       at: Date.now(),
     });
