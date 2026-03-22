@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import cloudinary from "@/lib/cloudinary";
 
 export async function POST(req: Request) {
   try {
@@ -14,23 +13,19 @@ export async function POST(req: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const safeFileName = file.name.replace(/\s+/g, "-");
-    const fileName = `${Date.now()}-${safeFileName}`;
+    const originalName = file.name.replace(/\s+/g, "-");
+    const publicId = `${Date.now()}-${originalName.replace(/\.[^.]+$/, "")}`;
+    const base64 = `data:${file.type};base64,${buffer.toString("base64")}`;
 
-    // 👇 NOVO CAMINHO (IMPORTANTE)
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "consultores");
-
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    const uploadPath = path.join(uploadDir, fileName);
-
-    fs.writeFileSync(uploadPath, buffer);
+    const result = await cloudinary.uploader.upload(base64, {
+      folder: "sacraluna/consultores",
+      public_id: publicId,
+      resource_type: "image",
+    });
 
     return NextResponse.json({
       ok: true,
-      url: `/uploads/consultores/${fileName}`, // 👈 também mudou
+      url: result.secure_url,
     });
   } catch (err) {
     return NextResponse.json(
