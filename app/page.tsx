@@ -31,10 +31,6 @@ function normalizeFotoUrl(url: string | null) {
   return u;
 }
 
-function isRaquel(nome: string) {
-  return (nome || "").trim().toLowerCase() === "raquel ferreira";
-}
-
 function getValorMinEur(c: any): number {
   const raw =
     c?.valor_min_eur ??
@@ -97,7 +93,7 @@ export default function HomePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const { raquelFeatured, secondFeatured, others } = useMemo(() => {
+  const { featured, others } = useMemo(() => {
     const sorted = [...consultores].sort((a, b) => {
       const rankDiff = getStatusRank(a) - getStatusRank(b);
       if (rankDiff !== 0) return rankDiff;
@@ -107,25 +103,17 @@ export default function HomePage() {
       });
     });
 
-    const raquel = sorted.find((c) => isRaquel(c.nome)) || null;
-
-    const second =
-      sorted.find((c) => !isRaquel(c.nome) && Number(c.destaque ?? 0) === 1) ||
-      null;
-
-    const excludedIds = new Set<number>();
-    if (raquel) excludedIds.add(raquel.id);
-    if (second) excludedIds.add(second.id);
-
-    const rest = sorted.filter((c) => !excludedIds.has(c.id));
+    const featuredList = sorted.filter((c) => Number(c.destaque ?? 0) === 1);
+    const featuredIds = new Set(featuredList.map((c) => c.id));
+    const rest = sorted.filter((c) => !featuredIds.has(c.id));
 
     return {
-      raquelFeatured: raquel,
-      secondFeatured: second,
+      featured: featuredList,
       others: rest,
     };
   }, [consultores]);
-return (
+
+  return (
     <div style={styles.page}>
       <Hero />
 
@@ -137,42 +125,34 @@ return (
         )}
         {err && <div style={styles.err}>Erro: {err}</div>}
 
-        <div style={styles.featureWrap}>
-          <div style={styles.featureGrid}>
-            <div style={styles.featureSlot}>
-              {raquelFeatured ? (
-                <ConsultorCard c={raquelFeatured} variant="featured" />
-              ) : (
-                <div style={styles.emptyFeatured}>
-                  A consultora Raquel Ferreira ainda não foi encontrada.
+        {!loading && !err && featured.length > 0 && (
+          <div style={styles.featureWrap}>
+            <div style={styles.featureGrid}>
+              {featured.map((c) => (
+                <div key={c.id} style={styles.featureSlot}>
+                  <ConsultorCard c={c} variant="featured" />
                 </div>
-              )}
-            </div>
-
-            <div style={styles.featureSlot}>
-              {secondFeatured ? (
-                <ConsultorCard c={secondFeatured} variant="featured" />
-              ) : (
-                <div style={styles.emptyFeatured}>
-                  Marca outra consultora como destaque para aparecer aqui.
-                </div>
-              )}
+              ))}
             </div>
           </div>
-        </div>
+        )}
       </section>
-
-      <section style={styles.section}>
+<section style={styles.section}>
         <div style={styles.grid}>
           {others.map((c) => (
             <ConsultorCard key={c.id} c={c} variant="grid" />
           ))}
         </div>
 
-        {!loading && !err && others.length === 0 && (
+        {!loading && !err && consultores.length === 0 && (
           <div style={{ opacity: 0.7, marginTop: 10 }}>
-            Ainda não há outros consultores. Quando adicionares, eles aparecem
-            aqui.
+            Ainda não há consultores disponíveis.
+          </div>
+        )}
+
+        {!loading && !err && consultores.length > 0 && others.length === 0 && (
+          <div style={{ opacity: 0.7, marginTop: 10 }}>
+            Todos os consultores atuais estão em destaque.
           </div>
         )}
       </section>
@@ -246,7 +226,8 @@ function ConsultorCard({
       alert("Erro ao iniciar chamada.");
     }
   }
-return (
+
+  return (
     <div
       style={S.card}
       role="button"
@@ -405,28 +386,13 @@ const styles: Record<string, React.CSSProperties> = {
 
   featureGrid: {
     display: "grid",
-    gridTemplateColumns: "320px 320px",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 320px))",
     justifyContent: "center",
     gap: 18,
   },
 
   featureSlot: {
     width: 320,
-  },
-
-  emptyFeatured: {
-    width: 320,
-    minHeight: 470,
-    borderRadius: 18,
-    border: "1px solid rgba(212,175,55,0.35)",
-    background: "rgba(0,0,0,0.18)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center",
-    padding: 20,
-    color: "#f4d78b",
-    opacity: 0.85,
   },
 
   grid: {
@@ -652,4 +618,4 @@ const gridCard: Record<string, React.CSSProperties> = {
     ...featuredCard.specWrap,
     minHeight: 56,
   },
-};
+};      
