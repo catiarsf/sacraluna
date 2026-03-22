@@ -23,7 +23,16 @@ export async function GET() {
           ativo,
           destaque,
           online,
-          ocupado
+          ocupado,
+
+          pack_1_qtd,
+          pack_1_preco,
+          pack_2_qtd,
+          pack_2_preco,
+          pack_3_qtd,
+          pack_3_preco,
+          pack_4_qtd,
+          pack_4_preco
         FROM consultores
         ORDER BY
           CASE
@@ -56,6 +65,15 @@ export async function GET() {
       destaque: Number(r.destaque ?? 0),
       online: Number(r.online ?? 0),
       ocupado: Number(r.ocupado ?? 0),
+
+      pack_1_qtd: Number(r.pack_1_qtd ?? 1),
+      pack_1_preco: Number(r.pack_1_preco ?? 1),
+      pack_2_qtd: Number(r.pack_2_qtd ?? 3),
+      pack_2_preco: Number(r.pack_2_preco ?? 3),
+      pack_3_qtd: Number(r.pack_3_qtd ?? 5),
+      pack_3_preco: Number(r.pack_3_preco ?? 5),
+      pack_4_qtd: Number(r.pack_4_qtd ?? 10),
+      pack_4_preco: Number(r.pack_4_preco ?? 10),
     }));
 
     return NextResponse.json({ ok: true, consultores });
