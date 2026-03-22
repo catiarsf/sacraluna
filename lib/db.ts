@@ -1,7 +1,17 @@
 import Database from "better-sqlite3";
 import path from "path";
+import fs from "fs";
 
-const dbPath = path.join(process.cwd(), "data.sqlite");
+const basePath =
+  process.env.SQLITE_DIR ||
+  process.env.RAILWAY_VOLUME_MOUNT_PATH ||
+  (process.env.NODE_ENV === "production" ? "/data" : process.cwd());
+
+if (!fs.existsSync(basePath)) {
+  fs.mkdirSync(basePath, { recursive: true });
+}
+
+const dbPath = path.join(basePath, "data.sqlite");
 const db = new Database(dbPath);
 
 db.pragma("journal_mode = WAL");
@@ -187,7 +197,6 @@ try { db.exec(`ALTER TABLE contactos ADD COLUMN telefone TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN assunto TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN status TEXT NOT NULL DEFAULT 'novo';`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN responded_at INTEGER;`); } catch {}
-
 /* WALLET */
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -239,7 +248,12 @@ export function creditWallet(params: {
       INSERT INTO wallet_transactions (
         wallet_id, session_id, type, amount_eur, description
       ) VALUES (?, ?, 'credit', ?, ?)
-    `).run(wallet.id, sessionId ?? null, round2(amount), description ?? "Crédito wallet");
+    `).run(
+      wallet.id,
+      sessionId ?? null,
+      round2(amount),
+      description ?? "Crédito wallet"
+    );
 
     return { ...wallet, balance_eur: newBalance };
   });
@@ -281,7 +295,12 @@ export function debitWallet(params: {
       INSERT INTO wallet_transactions (
         wallet_id, session_id, type, amount_eur, description
       ) VALUES (?, ?, 'debit', ?, ?)
-    `).run(wallet.id, sessionId ?? null, round2(-amount), description ?? "Débito wallet");
+    `).run(
+      wallet.id,
+      sessionId ?? null,
+      round2(-amount),
+      description ?? "Débito wallet"
+    );
 
     return {
       ...wallet,
