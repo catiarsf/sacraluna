@@ -7,10 +7,18 @@ type Consultor = {
   id: number;
   nome: string;
   foto_url: string | null;
-  pack_1_preco?: number;
-  pack_3_preco?: number;
-  pack_5_preco?: number;
-  pack_10_preco?: number;
+
+  pack_1_qtd: number;
+  pack_1_preco: number;
+
+  pack_2_qtd: number;
+  pack_2_preco: number;
+
+  pack_3_qtd: number;
+  pack_3_preco: number;
+
+  pack_4_qtd: number;
+  pack_4_preco: number;
 };
 
 export default function EmailConsultorPage() {
@@ -25,7 +33,7 @@ export default function EmailConsultorPage() {
   useEffect(() => {
     async function carregar() {
       try {
-        const res = await fetch(`/api/consultores/${consultorId}`, {
+        const res = await fetch('/api/consultores/${consultorId}', {
           cache: "no-store",
         });
 
@@ -36,10 +44,18 @@ export default function EmailConsultorPage() {
           id: Number(c?.id ?? 0),
           nome: String(c?.nome ?? ""),
           foto_url: c?.foto_url ?? null,
+
+          pack_1_qtd: Number(c?.pack_1_qtd ?? 1),
           pack_1_preco: Number(c?.pack_1_preco ?? 1),
-          pack_3_preco: Number(c?.pack_3_preco ?? 3),
-          pack_5_preco: Number(c?.pack_5_preco ?? 5),
-          pack_10_preco: Number(c?.pack_10_preco ?? 10),
+
+          pack_2_qtd: Number(c?.pack_2_qtd ?? 3),
+          pack_2_preco: Number(c?.pack_2_preco ?? 3),
+
+          pack_3_qtd: Number(c?.pack_3_qtd ?? 5),
+          pack_3_preco: Number(c?.pack_3_preco ?? 5),
+
+          pack_4_qtd: Number(c?.pack_4_qtd ?? 10),
+          pack_4_preco: Number(c?.pack_4_preco ?? 10),
         });
       } catch {
         alert("Erro ao carregar consultor.");
@@ -87,10 +103,10 @@ export default function EmailConsultorPage() {
       const pagamento = await stripe.json().catch(() => ({}));
 
       if (!stripe.ok || !pagamento?.url) {
-  console.log("ERRO CHECKOUT:", pagamento);
-  alert(pagamento?.error || "Erro ao iniciar pagamento.");
-  return;
-}
+        console.log("ERRO CHECKOUT:", pagamento);
+        alert(pagamento?.error || "Erro ao iniciar pagamento.");
+        return;
+      }
 
       window.location.href = pagamento.url;
     } catch {
@@ -121,34 +137,50 @@ export default function EmailConsultorPage() {
         <div style={styles.packs}>
           <button
             style={styles.pack}
-            onClick={() => comprarPack(1, consultor.pack_1_preco || 1)}
+            onClick={() =>
+              comprarPack(consultor.pack_1_qtd, consultor.pack_1_preco)
+            }
             disabled={loading}
           >
-            1 Pergunta — {(consultor.pack_1_preco || 1).toFixed(2)}€
+            {consultor.pack_1_qtd}{" "}
+            {consultor.pack_1_qtd === 1 ? "Pergunta" : "Perguntas"} —{" "}
+            {consultor.pack_1_preco.toFixed(2)}€
           </button>
 
           <button
             style={styles.pack}
-            onClick={() => comprarPack(3, consultor.pack_3_preco || 3)}
+            onClick={() =>
+              comprarPack(consultor.pack_2_qtd, consultor.pack_2_preco)
+            }
             disabled={loading}
           >
-            3 Perguntas — {(consultor.pack_3_preco || 3).toFixed(2)}€
+            {consultor.pack_2_qtd}{" "}
+            {consultor.pack_2_qtd === 1 ? "Pergunta" : "Perguntas"} —{" "}
+            {consultor.pack_2_preco.toFixed(2)}€
           </button>
 
           <button
             style={styles.pack}
-            onClick={() => comprarPack(5, consultor.pack_5_preco || 5)}
+            onClick={() =>
+              comprarPack(consultor.pack_3_qtd, consultor.pack_3_preco)
+            }
             disabled={loading}
           >
-            5 Perguntas — {(consultor.pack_5_preco || 5).toFixed(2)}€
+            {consultor.pack_3_qtd}{" "}
+            {consultor.pack_3_qtd === 1 ? "Pergunta" : "Perguntas"} —{" "}
+            {consultor.pack_3_preco.toFixed(2)}€
           </button>
 
           <button
             style={styles.pack}
-            onClick={() => comprarPack(10, consultor.pack_10_preco || 10)}
+            onClick={() =>
+              comprarPack(consultor.pack_4_qtd, consultor.pack_4_preco)
+            }
             disabled={loading}
           >
-            10 Perguntas — {(consultor.pack_10_preco || 10).toFixed(2)}€
+            {consultor.pack_4_qtd}{" "}
+            {consultor.pack_4_qtd === 1 ? "Pergunta" : "Perguntas"} —{" "}
+            {consultor.pack_4_preco.toFixed(2)}€
           </button>
         </div>
 
