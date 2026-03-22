@@ -12,19 +12,19 @@ function getTwilioConfig() {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
   if (!accountSid) {
-    throw new Error("Falta TWILIO_ACCOUNT_SID no .env.local");
+    throw new Error("Falta TWILIO_ACCOUNT_SID nas variáveis do servidor.");
   }
 
   if (!authToken) {
-    throw new Error("Falta TWILIO_AUTH_TOKEN no .env.local");
+    throw new Error("Falta TWILIO_AUTH_TOKEN nas variáveis do servidor.");
   }
 
   if (!twilioPhoneNumber) {
-    throw new Error("Falta TWILIO_PHONE_NUMBER no .env.local");
+    throw new Error("Falta TWILIO_PHONE_NUMBER nas variáveis do servidor.");
   }
 
   if (!siteUrl) {
-    throw new Error("Falta NEXT_PUBLIC_SITE_URL no .env.local");
+    throw new Error("Falta NEXT_PUBLIC_SITE_URL nas variáveis do servidor.");
   }
 
   return {
@@ -70,9 +70,9 @@ export async function POST(req: Request) {
     }
 
     const cliente = db.prepare(`
-      SELECT id, nome, telefone
+      SELECT id, nome, telefone, role
       FROM users
-      WHERE id = ?
+      WHERE id = ? AND role = 'cliente'
     `).get(session.user.id) as any;
 
     if (!cliente) {
@@ -130,15 +130,17 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-
-    if (Number(consultor.ativo ?? 0) !== 1) {
+ if (Number(consultor.ativo ?? 0) !== 1) {
       return NextResponse.json(
         { ok: false, error: "Consultor não está ativo." },
         { status: 400 }
       );
     }
 
-    if (Number(consultor.online ?? 0) !== 1 || Number(consultor.ocupado ?? 0) === 1) {
+    if (
+      Number(consultor.online ?? 0) !== 1 ||
+      Number(consultor.ocupado ?? 0) === 1
+    ) {
       return NextResponse.json(
         { ok: false, error: "Consultor não está disponível." },
         { status: 400 }
@@ -159,7 +161,7 @@ export async function POST(req: Request) {
     const wallet = db.prepare(`
       SELECT balance_eur
       FROM wallets
-      WHERE user_type='cliente' AND user_id=?
+      WHERE user_type = 'cliente' AND user_id = ?
     `).get(session.user.id) as any;
 
     const saldo = Number(wallet?.balance_eur ?? 0);
@@ -200,4 +202,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
+}   
