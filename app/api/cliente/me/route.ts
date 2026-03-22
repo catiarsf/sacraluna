@@ -5,7 +5,7 @@ import { getSession } from "@/lib/auth";
 export async function GET() {
   try {
     const session = await getSession();
-    const user = session.user;
+    const user = session?.user;
 
     console.log("SESSION USER /api/cliente/me:", user);
 
@@ -23,38 +23,54 @@ export async function GET() {
       );
     }
 
-    let wallet = db
-      .prepare(
-        `
-        SELECT id, balance_eur, earned_eur, spent_eur
-        FROM wallets
-        WHERE user_type = 'cliente' AND user_id = ?
-        `
-      )
-      .get(user.id) as any;
+    let wallet: any = null;
+    let saldo = 0;
 
-    if (!wallet) {
-      const info = db
-        .prepare(
-          `
-          INSERT INTO wallets (user_type, user_id, balance_eur, earned_eur, spent_eur)
-          VALUES ('cliente', ?, 0, 0, 0)
-          `
-        )
-        .run(user.id);
-
+    try {
       wallet = db
         .prepare(
           `
           SELECT id, balance_eur, earned_eur, spent_eur
           FROM wallets
-          WHERE id = ?
+          WHERE user_type = 'cliente' AND user_id = ?
           `
         )
-        .get(info.lastInsertRowid) as any;
-    }
+        .get(user.id) as any;
 
-    const saldo = Number(wallet?.balance_eur ?? 0);
+      if (!wallet) {
+        const info = db
+          .prepare(
+            `
+            INSERT INTO wallets (user_type, user_id, balance_eur, earned_eur, spent_eur)
+            VALUES ('cliente', ?, 0, 0, 0)
+            `
+          )
+          .run(user.id);
+
+        wallet = db
+          .prepare(
+            `
+            SELECT id, balance_eur, earned_eur, spent_eur
+            FROM wallets
+            WHERE id = ?
+            `
+          )
+          .get(info.lastInsertRowid) as any;
+      }
+
+      saldo = Number(wallet?.balance_eur ?? 0);
+    } catch (err: any) {
+      console.error("ERRO WALLET /api/cliente/me:", err);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Erro ao carregar carteira do cliente.",
+          detail: err?.message || String(err),
+        },
+        { status: 500 }
+      );
+    }
 
     let historico: any[] = [];
 
@@ -77,7 +93,7 @@ export async function GET() {
         )
         .all(user.id) as any[];
     } catch (err) {
-      console.warn("Histórico indisponível:", err);
+      console.warn("Histórico indisponível /api/cliente/me:", err);
       historico = [];
     }
 
@@ -86,20 +102,21 @@ export async function GET() {
       id: Number(user.id),
       cliente: {
         id: Number(user.id),
-        nome: String((user as any).nome ?? ""),
-        email: String((user as any).email ?? ""),
+        nome: String((user as any)?.nome ?? ""),
+        email: String((user as any)?.email ?? ""),
         role: "cliente",
       },
       saldo_eur: saldo,
       historico,
     });
-  } catch (e) {
-    console.error("ERRO /api/cliente/me:", e);
+  } catch (e: any) {
+    console.error("ERRO GERAL /api/cliente/me:", e);
 
     return NextResponse.json(
       {
         ok: false,
         error: "Erro interno do servidor",
+        detail: e?.message || String(e),
       },
       { status: 500 }
     );
