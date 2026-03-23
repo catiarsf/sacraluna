@@ -47,13 +47,21 @@ export async function POST(req: Request) {
         }
       | undefined;
 
+    // ✅ NOVO: verificação de segurança
+    if (!consultor) {
+      return NextResponse.json(
+        { ok: false, error: "Consultor não encontrado." },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       consultor: {
-        id: Number(consultor?.id ?? consultorId),
-        online: Number(consultor?.online ?? online),
-        ocupado: Number(consultor?.ocupado ?? 0),
-        ativo: Number(consultor?.ativo ?? 0),
+        id: Number(consultor.id),
+        online: Number(consultor.online ?? online),
+        ocupado: Number(consultor.ocupado ?? 0),
+        ativo: Number(consultor.ativo ?? 0),
       },
     });
   } catch (e: any) {

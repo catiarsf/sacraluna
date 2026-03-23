@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import db from "@/lib/db";
@@ -63,6 +64,44 @@ export async function POST(req: Request) {
       );
     }
 
+ const consultorAtual = db
+  .prepare(
+    `
+    SELECT id, online, ocupado, ativo
+    FROM consultores
+    WHERE id = ?
+    LIMIT 1
+    `
+  )
+  .get(consultorId) as any;
+
+if (!consultorAtual) {
+  return NextResponse.json(
+    { ok: false, error: "Consultor não encontrado." },
+    { status: 404 }
+  );
+}
+
+if (Number(consultorAtual.ativo ?? 0) !== 1) {
+  return NextResponse.json(
+    { ok: false, error: "Consultor não está ativo." },
+    { status: 400 }
+  );
+}
+
+if (Number(consultorAtual.online ?? 0) !== 1) {
+  return NextResponse.json(
+    { ok: false, error: "Consultor está offline." },
+    { status: 400 }
+  );
+}
+
+if (Number(consultorAtual.ocupado ?? 0) === 1) {
+  return NextResponse.json(
+    { ok: false, error: "Consultor já está ocupado." },
+    { status: 409 }
+  );
+}   
     const now = Math.floor(Date.now() / 1000);
 
     if (action === "reject") {

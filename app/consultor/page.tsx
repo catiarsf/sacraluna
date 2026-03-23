@@ -125,6 +125,7 @@ export default function ConsultorPage() {
   useEffect(() => {
     if (!online) return;
     if (ocupado) return;
+    if (responding) return;
 
     carregarPedidoPendente();
 
@@ -133,9 +134,8 @@ export default function ConsultorPage() {
     }, 3000);
 
     return () => clearInterval(t);
-  }, [online, ocupado]);
-
-  async function terminarSessao() {
+  }, [online, ocupado, responding]);
+ async function terminarSessao() {
     try {
       await fetch("/api/consultor/status", {
         method: "POST",
@@ -251,6 +251,10 @@ export default function ConsultorPage() {
 
       setOcupado(true);
 
+      if (!consultorId) {
+        throw new Error("ID do consultor em falta.");
+      }
+
       router.push(
         `/chat/${consultorId}?session=${encodeURIComponent(currentSessionId)}&role=consultor`
       );
@@ -279,18 +283,10 @@ export default function ConsultorPage() {
     );
   }
 
-  if (erro) {
-    return (
-      <main style={styles.page}>
-        <h1 style={styles.h1}>Área do Consultor</h1>
-        <p style={styles.error}>{erro}</p>
-      </main>
-    );
-  }
-
   return (
     <main style={styles.page}>
       <h1 style={styles.h1}>Área do Consultor</h1>
+      {erro && <p style={styles.error}>{erro}</p>}
 
       {pendingChat && online && !ocupado && (
         <div style={styles.pendingBox}>
@@ -358,8 +354,7 @@ export default function ConsultorPage() {
           </button>
         </div>
       </div>
-
-      <div style={styles.grid}>
+ <div style={styles.grid}>
         <div style={styles.card}>
           <div style={styles.cardLabel}>Ganhos hoje</div>
           <div style={styles.cardValue}>{ganhosHoje.toFixed(2)}€</div>
@@ -575,5 +570,6 @@ const styles: Record<string, React.CSSProperties> = {
   error: {
     color: "#ff8080",
     fontWeight: 700,
+    marginBottom: 14,
   },
 };
