@@ -18,16 +18,6 @@ type WalletData = {
   error?: string;
 };
 
-type MeData = {
-  ok: boolean;
-  consultor?: {
-    id: number;
-    nome: string;
-    email: string;
-  };
-  error?: string;
-};
-
 export default function ConsultorPage() {
   const router = useRouter();
 
@@ -37,6 +27,11 @@ export default function ConsultorPage() {
   const [consultorId, setConsultorId] = useState<number | null>(null);
 
   const [walletData, setWalletData] = useState<WalletData | null>(null);
+
+  const [online, setOnline] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const [alertasAtivos, setAlertasAtivos] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(false);
 
   async function carregarDados() {
     try {
@@ -65,6 +60,9 @@ export default function ConsultorPage() {
 
       setConsultorNome(String(jsonMe?.consultor?.nome ?? "Consultor"));
       setConsultorId(Number(jsonMe?.consultor?.id ?? 0));
+      setOnline(Number(jsonMe?.consultor?.online ?? 0) === 1);
+      setOcupado(Number(jsonMe?.consultor?.ocupado ?? 0) === 1);
+
       setWalletData(jsonWallet);
     } catch (e: any) {
       setErro(e?.message || "Erro ao carregar página do consultor.");
@@ -77,11 +75,73 @@ export default function ConsultorPage() {
     carregarDados();
   }, []);
 
+  useEffect(() => {
+    const ativo = localStorage.getItem("sacraluna_alertas_ativos");
+    setAlertasAtivos(ativo === "1");
+  }, []);
+
   async function terminarSessao() {
     try {
+      // antes de sair, fica offline e liberta ocupado
+      await fetch("/api/consultor/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ online: 0 }),
+      });
+
       await fetch("/api/logout-consultor", { method: "POST" });
     } finally {
       router.push("/login-consultor");
+    }
+  }
+
+  async function alterarEstado(novoOnline: number) {
+    try {
+      setStatusLoading(true);
+      setErro("");
+
+      const res = await fetch("/api/consultor/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ online: novoOnline }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Erro ao atualizar estado.");
+      }
+
+      setOnline(Number(json?.consultor?.online ?? novoOnline) === 1);
+      setOcupado(Number(json?.consultor?.ocupado ?? 0) === 1);
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao atualizar estado.");
+    } finally {
+      setStatusLoading(false);
+    }
+  }
+
+  function ativarAlertas() {
+    try {
+      const audio = new Audio("/alert.mp3");
+      audio.volume = 1;
+      audio.play()
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          localStorage.setItem("sacraluna_alertas_ativos", "1");
+          setAlertasAtivos(true);
+          alert("Alertas ativados com sucesso.");
+        })
+        .catch(() => {
+          alert("O browser bloqueou o som. Tenta novamente e confirma o volume.");
+        });
+    } catch {
+      alert("Não foi possível ativar os alertas.");
     }
   }
 
@@ -90,6 +150,9 @@ export default function ConsultorPage() {
   const saldoDisponivel = Number(walletData?.wallet?.balance_eur ?? 0);
   const consultasHoje = Number(walletData?.stats?.consultas_hoje ?? 0);
   const consultasTotal = Number(walletData?.stats?.consultas_total ?? 0);
+
+  const statusTexto = !online ? "Indisponível" : ocupado ? "Ocupada" : "Disponível";
+  const statusCor = !online ? "#ff7b7b" : ocupado ? "#ffd36b" : "#7dffb1";
 
   if (loading) {
     return (
@@ -118,12 +181,34 @@ export default function ConsultorPage() {
           <div style={styles.subtle}>Consultor</div>
           <div style={styles.name}>{consultorNome}</div>
           <div style={styles.idLine}>ID: {consultorId ?? "-"}</div>
+          <div style={{ ...styles.statusLine, color: statusCor }}>{statusTexto}</div>
         </div>
 
         <div style={styles.headerButtons}>
           <button style={styles.refreshBtn} onClick={carregarDados}>
             Atualizar
           </button>
+
+          <button
+            style={styles.onlineBtn}
+            onClick={() => alterarEstado(1)}
+            disabled={statusLoading}
+          >
+            Ficar disponível
+          </button>
+
+          <button
+            style={styles.offlineBtn}
+            onClick={() => alterarEstado(0)}
+            disabled={statusLoading}
+          >
+            Ficar indisponível
+          </button>
+
+          <button style={styles.alertBtn} onClick={ativarAlertas}>
+            {alertasAtivos ? "🔔 Alertas ativos" : "🔔 Ativar alertas"}
+          </button>
+
           <button style={styles.logoutBtn} onClick={terminarSessao}>
             Terminar sessão
           </button>
@@ -213,6 +298,11 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 6,
     opacity: 0.8,
   },
+  statusLine: {
+    marginTop: 10,
+    fontWeight: 900,
+    fontSize: 16,
+  },
   headerButtons: {
     display: "flex",
     gap: 10,
@@ -225,6 +315,33 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(212,175,55,0.6)",
     background: "rgba(212,175,55,0.12)",
     color: "#f4d78b",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  onlineBtn: {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(125,255,177,0.5)",
+    background: "rgba(20,120,60,0.35)",
+    color: "#d8ffe6",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  offlineBtn: {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,140,140,0.45)",
+    background: "rgba(120,20,20,0.35)",
+    color: "#ffd7d7",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  alertBtn: {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(140,180,255,0.5)",
+    background: "rgba(26,63,130,0.45)",
+    color: "#dce8ff",
     fontWeight: 800,
     cursor: "pointer",
   },

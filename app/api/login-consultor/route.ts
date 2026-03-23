@@ -82,6 +82,17 @@ export async function POST(req: Request) {
       );
     }
 
+    // Ao fazer login, fica online e limpa qualquer "ocupado" preso
+    db.prepare(
+      `
+      UPDATE consultores
+      SET online = 1,
+          ocupado = 0,
+          last_seen_at = strftime('%s','now')
+      WHERE id = ?
+      `
+    ).run(consultor.id);
+
     const role = "consultor";
 
     const res = NextResponse.json({

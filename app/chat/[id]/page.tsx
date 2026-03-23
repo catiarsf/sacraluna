@@ -80,6 +80,7 @@ export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const billedMinutesRef = useRef(0);
   const endingRef = useRef(false);
+  const alertAudioRef = useRef<HTMLAudioElement | null>(null);
 
   function goBackToArea() {
     if (role === "consultor") {
@@ -112,6 +113,21 @@ export default function ChatPage() {
           session_id: sessionId,
         }),
       });
+    } catch {}
+  }
+
+  function tocarAlertaSeAtivado() {
+    try {
+      const ativo = localStorage.getItem("sacraluna_alertas_ativos");
+      if (ativo !== "1") return;
+
+      if (!alertAudioRef.current) {
+        alertAudioRef.current = new Audio("/alert.mp3");
+        alertAudioRef.current.volume = 1;
+      }
+
+      alertAudioRef.current.currentTime = 0;
+      alertAudioRef.current.play().catch(() => {});
     } catch {}
   }
 
@@ -205,7 +221,7 @@ export default function ChatPage() {
 
     carregarInfo();
   }, [consultorId, router, sessionId, role]);
- useEffect(() => {
+useEffect(() => {
     if (!sessionId) return;
 
     setErr(null);
@@ -272,6 +288,10 @@ export default function ChatPage() {
       };
 
       setMsgs((prev) => [...prev, msg]);
+
+      if (m.senderRole !== role) {
+        tocarAlertaSeAtivado();
+      }
     });
 
     socket.on("call_status", async (payload: any) => {
@@ -378,6 +398,27 @@ export default function ChatPage() {
     }
   }, [elapsedSeconds, sessionId]);
 
+  useEffect(() => {
+    function endByBeacon() {
+      if (!sessionId) return;
+
+      try {
+        navigator.sendBeacon(
+          "/api/chat/end",
+          new Blob([JSON.stringify({ session_id: sessionId })], {
+            type: "application/json",
+          })
+        );
+      } catch {}
+    }
+
+    window.addEventListener("beforeunload", endByBeacon);
+
+    return () => {
+      window.removeEventListener("beforeunload", endByBeacon);
+    };
+  }, [sessionId]);
+
   async function terminarConsulta() {
     if (!sessionId || endingRef.current) return;
 
@@ -436,7 +477,8 @@ export default function ChatPage() {
       </div>
     );
   }
-return (
+
+  return (
     <div style={styles.page}>
       <div style={styles.topBar}>
         <button style={styles.navBtn} onClick={() => router.push("/")}>
@@ -514,8 +556,7 @@ return (
           </div>
         </div>
       )}
-
-      {err && <div style={styles.err}>Erro: {err}</div>}
+ {err && <div style={styles.err}>Erro: {err}</div>}
 
       <div style={styles.chatBox}>
         {msgs.length === 0 ? (
@@ -557,7 +598,8 @@ return (
     </div>
   );
 }
- const styles: Record<string, React.CSSProperties> = {
+
+const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     padding: "22px 18px 30px",
@@ -661,4 +703,4 @@ return (
     cursor: "pointer",
     padding: "12px 16px",
   },
-};  
+};       
