@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type WalletData = {
@@ -18,6 +18,16 @@ type WalletData = {
   error?: string;
 };
 
+type PendingChat = {
+  id: string;
+  cliente_id: number;
+  consultor_id: number;
+  cliente_nome: string;
+  status: string;
+  price_per_min: number;
+  created_at: number;
+} | null;
+
 export default function ConsultorPage() {
   const router = useRouter();
 
@@ -32,6 +42,12 @@ export default function ConsultorPage() {
   const [ocupado, setOcupado] = useState(false);
   const [alertasAtivos, setAlertasAtivos] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
+
+  const [pendingChat, setPendingChat] = useState<PendingChat>(null);
+  const [responding, setResponding] = useState(false);
+
+  const alertAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lastAlertedSessionRef = useRef<string>("");
 
   async function carregarDados() {
     try {
@@ -71,6 +87,32 @@ export default function ConsultorPage() {
     }
   }
 
+  async function carregarPedidoPendente() {
+    try {
+      const res = await fetch("/api/chat/pending-for-consultor", {
+        cache: "no-store",
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.ok) {
+        return;
+      }
+
+      const nextPending = json?.pending ?? null;
+      setPendingChat(nextPending);
+
+      if (
+        nextPending?.id &&
+        nextPending.id !== lastAlertedSessionRef.current &&
+        localStorage.getItem("sacraluna_alertas_ativos") === "1"
+      ) {
+        lastAlertedSessionRef.current = nextPending.id;
+        tocarAlerta();
+      }
+    } catch {}
+  }
+
   useEffect(() => {
     carregarDados();
   }, []);
@@ -80,9 +122,21 @@ export default function ConsultorPage() {
     setAlertasAtivos(ativo === "1");
   }, []);
 
+  useEffect(() => {
+    if (!online) return;
+    if (ocupado) return;
+
+    carregarPedidoPendente();
+
+    const t = setInterval(() => {
+      carregarPedidoPendente();
+    }, 3000);
+
+    return () => clearInterval(t);
+  }, [online, ocupado]);
+
   async function terminarSessao() {
     try {
-      // antes de sair, fica offline e liberta ocupado
       await fetch("/api/consultor/status", {
         method: "POST",
         headers: {
@@ -118,6 +172,10 @@ export default function ConsultorPage() {
 
       setOnline(Number(json?.consultor?.online ?? novoOnline) === 1);
       setOcupado(Number(json?.consultor?.ocupado ?? 0) === 1);
+
+      if (novoOnline === 0) {
+        setPendingChat(null);
+      }
     } catch (e: any) {
       setErro(e?.message || "Erro ao atualizar estado.");
     } finally {
@@ -125,10 +183,23 @@ export default function ConsultorPage() {
     }
   }
 
+  function tocarAlerta() {
+    try {
+      if (!alertAudioRef.current) {
+        alertAudioRef.current = new Audio("/alert.mp3");
+        alertAudioRef.current.volume = 1;
+      }
+
+      alertAudioRef.current.currentTime = 0;
+      alertAudioRef.current.play().catch(() => {});
+    } catch {}
+  }
+
   function ativarAlertas() {
     try {
       const audio = new Audio("/alert.mp3");
       audio.volume = 1;
+
       audio.play()
         .then(() => {
           audio.pause();
@@ -142,6 +213,51 @@ export default function ConsultorPage() {
         });
     } catch {
       alert("Não foi possível ativar os alertas.");
+    }
+  }
+
+  async function responderPedido(action: "accept" | "reject") {
+    if (!pendingChat?.id) return;
+
+    try {
+      setResponding(true);
+      setErro("");
+
+      const res = await fetch("/api/chat/respond", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: pendingChat.id,
+          action,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Erro ao responder ao pedido.");
+      }
+
+      const currentSessionId = pendingChat.id;
+
+      setPendingChat(null);
+
+      if (action === "reject") {
+        alert("Pedido rejeitado.");
+        return;
+      }
+
+      setOcupado(true);
+
+      router.push(
+        `/chat/${consultorId}?session=${encodeURIComponent(currentSessionId)}&role=consultor`
+      );
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao responder ao pedido.");
+    } finally {
+      setResponding(false);
     }
   }
 
@@ -175,6 +291,34 @@ export default function ConsultorPage() {
   return (
     <main style={styles.page}>
       <h1 style={styles.h1}>Área do Consultor</h1>
+
+      {pendingChat && online && !ocupado && (
+        <div style={styles.pendingBox}>
+          <div style={styles.pendingTitle}>Novo pedido de chat</div>
+          <div style={styles.pendingText}>
+            <b>Cliente:</b> {pendingChat.cliente_nome}
+          </div>
+          <div style={styles.pendingText}>
+            <b>Preço:</b> {Number(pendingChat.price_per_min ?? 0).toFixed(2)}€/min
+          </div>
+          <div style={styles.pendingBtns}>
+            <button
+              style={styles.acceptBtn}
+              onClick={() => responderPedido("accept")}
+              disabled={responding}
+            >
+              Aceitar
+            </button>
+            <button
+              style={styles.rejectBtn}
+              onClick={() => responderPedido("reject")}
+              disabled={responding}
+            >
+              Rejeitar
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={styles.headerCard}>
         <div>
@@ -272,6 +416,48 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 22,
     fontWeight: 800,
     marginBottom: 10,
+  },
+  pendingBox: {
+    padding: 18,
+    borderRadius: 16,
+    background: "rgba(24, 44, 90, 0.55)",
+    border: "1px solid rgba(212,175,55,0.35)",
+    marginBottom: 18,
+    boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
+  },
+  pendingTitle: {
+    fontSize: 22,
+    fontWeight: 900,
+    color: "#f4d78b",
+    marginBottom: 10,
+  },
+  pendingText: {
+    marginBottom: 8,
+    fontSize: 16,
+  },
+  pendingBtns: {
+    display: "flex",
+    gap: 12,
+    flexWrap: "wrap",
+    marginTop: 14,
+  },
+  acceptBtn: {
+    padding: "12px 18px",
+    borderRadius: 12,
+    border: "1px solid rgba(125,255,177,0.6)",
+    background: "rgba(20,120,60,0.45)",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  rejectBtn: {
+    padding: "12px 18px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,120,120,0.6)",
+    background: "rgba(120,0,0,0.45)",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
   },
   headerCard: {
     display: "flex",

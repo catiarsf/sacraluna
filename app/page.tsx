@@ -65,9 +65,31 @@ function getPrecoVoz(c: any): number {
 }
 
 function getStatusRank(c: Consultor) {
-  if (Number(c.online ?? 0) === 1 && Number(c.ocupado ?? 0) === 0) return 0;
-  if (Number(c.online ?? 0) === 1 && Number(c.ocupado ?? 0) === 1) return 1;
-  return 2;
+  if (
+    Number(c.ativo ?? 0) === 1 &&
+    Number(c.online ?? 0) === 1 &&
+    Number(c.ocupado ?? 0) === 0
+  ) {
+    return 0;
+  }
+
+  if (
+    Number(c.ativo ?? 0) === 1 &&
+    Number(c.online ?? 0) === 1 &&
+    Number(c.ocupado ?? 0) === 1
+  ) {
+    return 1;
+  }
+
+  if (Number(c.ativo ?? 0) === 1 && Number(c.online ?? 0) === 0) {
+    return 2;
+  }
+
+  return 3;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export default function HomePage() {
@@ -123,6 +145,7 @@ export default function HomePage() {
         {loading && (
           <div style={{ opacity: 0.75, marginTop: 10 }}>A carregar…</div>
         )}
+
         {err && <div style={styles.err}>Erro: {err}</div>}
 
         {!loading && !err && featured.length > 0 && (
@@ -137,7 +160,8 @@ export default function HomePage() {
           </div>
         )}
       </section>
-<section style={styles.section}>
+
+      <section style={styles.section}>
         <div style={styles.grid}>
           {others.map((c) => (
             <ConsultorCard key={c.id} c={c} variant="grid" />
@@ -163,7 +187,6 @@ export default function HomePage() {
     </div>
   );
 }
-
 function ConsultorCard({
   c,
   variant,
@@ -179,26 +202,34 @@ function ConsultorCard({
 
   const hrefPerfil = `/consultores/${c.id}`;
 
+  const ativo = Number(c.ativo ?? 0) === 1;
   const online = Number(c.online ?? 0) === 1;
   const ocupado = Number(c.ocupado ?? 0) === 1;
 
-  const statusText = online
-    ? ocupado
-      ? "Ocupado"
-      : "Disponível"
-    : "Indisponível";
+  const [creatingChat, setCreatingChat] = useState(false);
+  const [waitingText, setWaitingText] = useState<string | null>(null);
 
-  const statusColor = online
-    ? ocupado
-      ? "#ffd36b"
-      : "#7dffb1"
-    : "#ff6b6b";
+  const statusText = !ativo
+    ? "Indisponível"
+    : !online
+    ? "Offline"
+    : ocupado
+    ? "Ocupado"
+    : "Disponível";
+
+  const statusColor = !ativo
+    ? "#ff6b6b"
+    : !online
+    ? "#c7c7c7"
+    : ocupado
+    ? "#ffd36b"
+    : "#7dffb1";
 
   async function iniciarChamada(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!online || ocupado) {
+    if (!ativo || !online || ocupado) {
       alert("Este consultor não está disponível neste momento.");
       return;
     }
@@ -221,9 +252,104 @@ function ConsultorCard({
         return;
       }
 
-      alert("A chamada está a ser iniciada. Atende o teu telemóvel.");
+      alert("A chamada está a ser iniciada. A consultora será contactada primeiro.");
     } catch {
       alert("Erro ao iniciar chamada.");
+    }
+  }
+
+  async function iniciarPedidoChat(e: React.MouseEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!ativo || !online || ocupado) {
+      alert("Este consultor não está disponível neste momento.");
+      return;
+    }
+
+    try {
+      setCreatingChat(true);
+      setWaitingText("A enviar pedido para a consultora...");
+
+      const res = await fetch("/api/chat/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          consultor_id: c.id,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.ok) {
+        setWaitingText(null);
+        alert(json?.error || "Não foi possível pedir o chat.");
+        return;
+      }
+
+      const sessionId = String(json?.session_id ?? "");
+
+      if (!sessionId) {
+        setWaitingText(null);
+        alert("Sessão inválida.");
+        return;
+      }
+
+      if (json?.status === "active") {
+        router.push(
+          `/chat/${c.id}?session=${encodeURIComponent(sessionId)}&role=cliente`
+        );
+        return;
+      }
+
+      setWaitingText("A aguardar resposta da consultora...");
+
+      for (let i = 0; i < 40; i++) {
+        await sleep(3000);
+
+        const statusRes = await fetch(
+          `/api/chat/session-status?session_id=${encodeURIComponent(sessionId)}`,
+          { cache: "no-store" }
+        );
+
+        const statusJson = await statusRes.json().catch(() => ({}));
+
+        if (!statusRes.ok || !statusJson?.ok) {
+          continue;
+        }
+
+        const status = String(statusJson?.session?.status ?? "");
+
+        if (status === "active") {
+          setWaitingText(null);
+          router.push(
+            `/chat/${c.id}?session=${encodeURIComponent(sessionId)}&role=cliente`
+          );
+          return;
+        }
+
+        if (status === "rejected") {
+          setWaitingText(null);
+          alert("A consultora rejeitou o pedido.");
+          return;
+        }
+
+        if (status === "ended") {
+          setWaitingText(null);
+          alert("A sessão terminou antes de começar.");
+          return;
+        }
+      }
+
+      setWaitingText(null);
+      alert("A consultora não respondeu a tempo.");
+    } catch {
+      setWaitingText(null);
+      alert("Erro ao iniciar pedido de chat.");
+    } finally {
+      setCreatingChat(false);
     }
   }
 
@@ -279,48 +405,20 @@ function ConsultorCard({
           )}
         </div>
 
+        {waitingText && (
+          <div style={S.waitingBox}>
+            {waitingText}
+          </div>
+        )}
+
         <div style={S.btns}>
           <button
             type="button"
             style={S.btnGold}
-            onClick={async (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-
-              if (!online || ocupado) {
-                alert("Este consultor não está disponível neste momento.");
-                return;
-              }
-
-              try {
-                const res = await fetch("/api/chat/start", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    consultor_id: c.id,
-                  }),
-                });
-
-                const json = await res.json().catch(() => ({}));
-
-                if (!res.ok || !json?.ok) {
-                  alert(json?.error || "Não foi possível iniciar o chat.");
-                  return;
-                }
-
-                router.push(
-                  `/chat/${c.id}?session=${encodeURIComponent(
-                    json.session_id
-                  )}&role=cliente`
-                );
-              } catch {
-                alert("Erro ao iniciar chat.");
-              }
-            }}
+            onClick={iniciarPedidoChat}
+            disabled={creatingChat}
           >
-            CHAT
+            {creatingChat ? "AGUARDA..." : "CHAT"}
           </button>
 
           <button type="button" style={S.btnBlue} onClick={iniciarChamada}>
@@ -618,4 +716,4 @@ const gridCard: Record<string, React.CSSProperties> = {
     ...featuredCard.specWrap,
     minHeight: 56,
   },
-};      
+};

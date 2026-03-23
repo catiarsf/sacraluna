@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
     if (user.role !== "cliente") {
       return NextResponse.json(
-        { ok: false, error: "Só clientes podem iniciar chat." },
+        { ok: false, error: "Só clientes podem pedir chat." },
         { status: 403 }
       );
     }
@@ -95,17 +95,13 @@ export async function POST(req: Request) {
       .get(user.id, consultorId) as any;
 
     if (alreadyActive) {
-      return NextResponse.json(
-        {
-          ok: true,
-          status: "active",
-          reused: true,
-          session_id: alreadyActive.id,
-          consultor_id: consultorId,
-          preco_por_min: toNumber(consultor.preco_por_min),
-        },
-        { status: 200 }
-      );
+      return NextResponse.json({
+        ok: true,
+        status: "active",
+        session_id: alreadyActive.id,
+        consultor_id: consultorId,
+        preco_por_min: toNumber(consultor.preco_por_min),
+      });
     }
 
     const alreadyPendingSamePair = db
@@ -122,17 +118,13 @@ export async function POST(req: Request) {
       .get(user.id, consultorId) as any;
 
     if (alreadyPendingSamePair) {
-      return NextResponse.json(
-        {
-          ok: true,
-          status: "pending",
-          reused: true,
-          session_id: alreadyPendingSamePair.id,
-          consultor_id: consultorId,
-          preco_por_min: toNumber(consultor.preco_por_min),
-        },
-        { status: 200 }
-      );
+      return NextResponse.json({
+        ok: true,
+        status: "pending",
+        session_id: alreadyPendingSamePair.id,
+        consultor_id: consultorId,
+        preco_por_min: toNumber(consultor.preco_por_min),
+      });
     }
 
     const pendingForConsultor = db
@@ -202,7 +194,7 @@ export async function POST(req: Request) {
       chatSessionId,
       user.id,
       consultorId,
-      String((user as any).nome ?? ""),
+      String((user as any).nome ?? "Cliente"),
       precoPorMin
     );
 
@@ -216,7 +208,7 @@ export async function POST(req: Request) {
       minutos_estimados: Math.floor(saldo / precoPorMin),
     });
   } catch (e: any) {
-    console.error("ERRO /api/chat/start:", e);
+    console.error("ERRO /api/chat/request:", e);
 
     return NextResponse.json(
       { ok: false, error: e?.message || "Erro interno do servidor." },

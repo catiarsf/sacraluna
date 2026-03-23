@@ -70,6 +70,7 @@ export default function ChatPage() {
   const [consultor, setConsultor] = useState<ConsultorInfo | null>(null);
   const [saldoCliente, setSaldoCliente] = useState<number>(0);
   const [loadingInfo, setLoadingInfo] = useState(true);
+  const [sessionValidated, setSessionValidated] = useState(false);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [billedSeconds, setBilledSeconds] = useState(0);
@@ -171,6 +172,56 @@ export default function ChatPage() {
   }, [sessionId, role, router]);
 
   useEffect(() => {
+    async function validarSessao() {
+      if (!sessionId) return;
+
+      try {
+        setSessionValidated(false);
+
+        const res = await fetch(
+          `/api/chat/session-status?session_id=${encodeURIComponent(sessionId)}`,
+          { cache: "no-store" }
+        );
+
+        const json = await res.json().catch(() => null);
+
+        if (!res.ok || !json?.ok) {
+          throw new Error(json?.error || "Não foi possível validar a sessão.");
+        }
+
+        const status = String(json?.session?.status ?? "");
+
+        if (status === "rejected") {
+          alert("A consulta foi rejeitada.");
+          goBackToArea();
+          return;
+        }
+
+        if (status === "pending") {
+          alert("A consulta ainda não foi aceite.");
+          goBackToArea();
+          return;
+        }
+
+        if (status === "ended") {
+          alert("Esta sessão já terminou.");
+          goBackToArea();
+          return;
+        }
+
+        if (status !== "active") {
+          throw new Error("Sessão inválida para o chat.");
+        }
+
+        setSessionValidated(true);
+      } catch (e: any) {
+        setErr(e?.message || "Erro ao validar sessão.");
+      }
+    }
+
+    validarSessao();
+  }, [sessionId, role, router]);
+ useEffect(() => {
     async function carregarInfo() {
       if (!Number.isFinite(consultorId) || consultorId <= 0 || !sessionId) return;
 
@@ -219,10 +270,13 @@ export default function ChatPage() {
       }
     }
 
-    carregarInfo();
-  }, [consultorId, router, sessionId, role]);
-useEffect(() => {
-    if (!sessionId) return;
+    if (sessionValidated) {
+      carregarInfo();
+    }
+  }, [consultorId, router, sessionId, role, sessionValidated]);
+
+  useEffect(() => {
+    if (!sessionId || !sessionValidated) return;
 
     setErr(null);
 
@@ -253,14 +307,6 @@ useEffect(() => {
 
       if (role === "consultor" && Number.isFinite(consultorId) && consultorId > 0) {
         socket.emit("register_consultor", { consultorId });
-      }
-
-      if (role === "cliente" && Number.isFinite(consultorId) && consultorId > 0) {
-        socket.emit("call_request", {
-          consultorId,
-          sessionId,
-          clienteNome: "Cliente",
-        });
       }
     });
 
@@ -335,25 +381,29 @@ useEffect(() => {
       socket.disconnect();
       sockRef.current = null;
     };
-  }, [sessionId, consultorId, role, router, socketBaseUrl]);
+  }, [sessionId, consultorId, role, router, socketBaseUrl, sessionValidated]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs.length]);
 
   useEffect(() => {
+    if (!sessionValidated) return;
+
     const t = setInterval(() => {
       setElapsedSeconds(Math.floor((Date.now() - chatStartedAt) / 1000));
     }, 1000);
 
     return () => clearInterval(t);
-  }, [chatStartedAt]);
+  }, [chatStartedAt, sessionValidated]);
 
   useEffect(() => {
     billedMinutesRef.current = Math.floor(billedSeconds / 60);
   }, [billedSeconds]);
 
   useEffect(() => {
+    if (!sessionValidated) return;
+
     async function cobrarMinuto() {
       try {
         const res = await fetch("/api/chat/bill", {
@@ -396,9 +446,8 @@ useEffect(() => {
       billedMinutesRef.current = minutosDecorridos;
       cobrarMinuto();
     }
-  }, [elapsedSeconds, sessionId]);
-
-  useEffect(() => {
+  }, [elapsedSeconds, sessionId, sessionValidated]);
+useEffect(() => {
     function endByBeacon() {
       if (!sessionId) return;
 
@@ -556,7 +605,8 @@ useEffect(() => {
           </div>
         </div>
       )}
- {err && <div style={styles.err}>Erro: {err}</div>}
+
+      {err && <div style={styles.err}>Erro: {err}</div>}
 
       <div style={styles.chatBox}>
         {msgs.length === 0 ? (
@@ -703,4 +753,4 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     padding: "12px 16px",
   },
-};       
+};   
