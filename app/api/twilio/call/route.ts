@@ -11,21 +11,10 @@ function getTwilioConfig() {
   const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
-  if (!accountSid) {
-    throw new Error("Falta TWILIO_ACCOUNT_SID nas variáveis do servidor.");
-  }
-
-  if (!authToken) {
-    throw new Error("Falta TWILIO_AUTH_TOKEN nas variáveis do servidor.");
-  }
-
-  if (!twilioPhoneNumber) {
-    throw new Error("Falta TWILIO_PHONE_NUMBER nas variáveis do servidor.");
-  }
-
-  if (!siteUrl) {
-    throw new Error("Falta NEXT_PUBLIC_SITE_URL nas variáveis do servidor.");
-  }
+  if (!accountSid) throw new Error("Falta TWILIO_ACCOUNT_SID nas variáveis do servidor.");
+  if (!authToken) throw new Error("Falta TWILIO_AUTH_TOKEN nas variáveis do servidor.");
+  if (!twilioPhoneNumber) throw new Error("Falta TWILIO_PHONE_NUMBER nas variáveis do servidor.");
+  if (!siteUrl) throw new Error("Falta NEXT_PUBLIC_SITE_URL nas variáveis do servidor.");
 
   return {
     client: Twilio(accountSid, authToken),
@@ -42,7 +31,6 @@ function toNumber(v: any) {
 export async function POST(req: Request) {
   try {
     const { client, twilioPhoneNumber, siteUrl } = getTwilioConfig();
-
     const session = await getSession();
 
     if (!session?.user?.id) {
@@ -91,7 +79,7 @@ export async function POST(req: Request) {
 
     if (!String(cliente.telefone).startsWith("+")) {
       return NextResponse.json(
-        { ok: false, error: "Telefone inválido. Usa formato +351XXXXXXXXX." },
+        { ok: false, error: "Telefone do cliente inválido. Usa formato +351XXXXXXXXX." },
         { status: 400 }
       );
     }
@@ -126,30 +114,26 @@ export async function POST(req: Request) {
 
     if (!String(consultor.telefone).startsWith("+")) {
       return NextResponse.json(
-        { ok: false, error: "Telefone do consultor inválido." },
+        { ok: false, error: "Telefone do consultor inválido. Usa formato +351XXXXXXXXX." },
         { status: 400 }
       );
     }
- if (Number(consultor.ativo ?? 0) !== 1) {
+
+    if (Number(consultor.ativo ?? 0) !== 1) {
       return NextResponse.json(
         { ok: false, error: "Consultor não está ativo." },
         { status: 400 }
       );
     }
 
-    if (
-      Number(consultor.online ?? 0) !== 1 ||
-      Number(consultor.ocupado ?? 0) === 1
-    ) {
+    if (Number(consultor.online ?? 0) !== 1 || Number(consultor.ocupado ?? 0) === 1) {
       return NextResponse.json(
         { ok: false, error: "Consultor não está disponível." },
         { status: 400 }
       );
     }
 
-    const precoVoz = toNumber(
-      consultor.preco_voz ?? consultor.preco_por_min ?? 0
-    );
+    const precoVoz = toNumber(consultor.preco_voz ?? consultor.preco_por_min ?? 0);
 
     if (!precoVoz || precoVoz <= 0) {
       return NextResponse.json(
@@ -177,22 +161,38 @@ export async function POST(req: Request) {
       );
     }
 
+    // Marca a consultora como ocupada logo ao arrancar a chamada
+    db.prepare(`
+      UPDATE consultores
+      SET ocupado = 1,
+          last_seen_at = strftime('%s','now')
+      WHERE id = ?
+    `).run(consultorId);
+
     const connectUrl =
       `${siteUrl}/api/twilio/connect` +
       `?consultorId=${consultorId}` +
       `&clienteId=${session.user.id}`;
 
+    const statusCallbackUrl =
+      `${siteUrl}/api/twilio/status` +
+      `?consultorId=${consultorId}`;
+
+    // A chamada inicial vai para a CONSULTORA
     const call = await client.calls.create({
-      to: cliente.telefone,
+      to: consultor.telefone,
       from: twilioPhoneNumber,
       url: connectUrl,
       method: "POST",
+      statusCallback: statusCallbackUrl,
+      statusCallbackMethod: "POST",
+      statusCallbackEvent: ["completed", "busy", "no-answer", "failed"],
     });
 
     return NextResponse.json({
       ok: true,
       sid: call.sid,
-      message: "A chamada está a ser iniciada. Atende o teu telemóvel.",
+      message: "A chamada está a ser iniciada. A consultora será contactada primeiro.",
     });
   } catch (e: any) {
     console.error("ERRO TWILIO CALL:", e);
@@ -202,4 +202,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}   
+}
