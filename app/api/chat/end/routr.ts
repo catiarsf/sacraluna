@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 
@@ -7,12 +8,8 @@ export async function POST(req: Request) {
     const authSession = await getSession();
     const user = authSession.user;
 
-    if (!user || !user.id) {
-      return NextResponse.json(
-        { ok: false, error: "Não autenticado." },
-        { status: 401 }
-      );
-    }
+    const cookieStore = await cookies();
+    const consultorIdCookie = Number(cookieStore.get("consultor_id")?.value || 0);
 
     const body = await req.json().catch(() => ({}));
     const sessionId = String(body?.session_id ?? "").trim();
@@ -32,7 +29,14 @@ export async function POST(req: Request) {
         WHERE id = ?
         `
       )
-      .get(sessionId) as any;
+      .get(sessionId) as
+      | {
+          id: string;
+          cliente_id: number;
+          consultor_id: number;
+          status: string;
+        }
+      | undefined;
 
     if (!row) {
       return NextResponse.json(
@@ -41,7 +45,10 @@ export async function POST(req: Request) {
       );
     }
 
-    if (Number(row.cliente_id) !== Number(user.id)) {
+    const isCliente = !!user?.id && Number(row.cliente_id) === Number(user.id);
+    const isConsultor = !!consultorIdCookie && Number(row.consultor_id) === Number(consultorIdCookie);
+
+    if (!isCliente && !isConsultor) {
       return NextResponse.json(
         { ok: false, error: "Sem permissão." },
         { status: 403 }
