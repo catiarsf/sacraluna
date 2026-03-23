@@ -1,133 +1,144 @@
-import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import db from "@/lib/db";
+"use client";
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json().catch(() => ({}));
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 
-    const email = String(body?.email ?? "").trim().toLowerCase();
-    const password = String(body?.password ?? "");
+export default function LoginConsultorPage() {
+  const router = useRouter();
 
-    if (!email || !password) {
-      return NextResponse.json(
-        { ok: false, error: "Preenche o email e a password." },
-        { status: 400 }
-      );
-    }
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
 
-    const consultor = db
-      .prepare(
-        `
-        SELECT id, nome, email, password, ativo, role
-        FROM consultores
-        WHERE lower(email) = ?
-        LIMIT 1
-        `
-      )
-      .get(email) as
-      | {
-          id: number;
-          nome: string;
-          email: string;
-          password: string;
-          ativo: number;
-          role: string | null;
-        }
-      | undefined;
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    setLoading(true);
 
-    if (!consultor) {
-      return NextResponse.json(
-        { ok: false, error: "Consultor não encontrado para este email." },
-        { status: 401 }
-      );
-    }
-
-    let bcryptOk = false;
     try {
-      bcryptOk = await bcrypt.compare(password, String(consultor.password ?? ""));
-    } catch {
-      bcryptOk = false;
-    }
-
-    const plainOk = String(consultor.password ?? "") === password;
-    const passwordOk = bcryptOk || plainOk;
-
-    if (!passwordOk) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Password inválida.",
-          debug: {
-            emailEncontrado: consultor.email,
-            ativo: consultor.ativo,
-            role: consultor.role,
-            bcryptOk,
-            plainOk,
-          },
+      const res = await fetch("/api/login-consultor", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        { status: 401 }
-      );
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Credenciais inválidas.");
+      }
+
+      router.push("/consultor");
+    } catch (e: any) {
+      setErr(e?.message || "Erro ao iniciar sessão.");
+    } finally {
+      setLoading(false);
     }
-
-    if (Number(consultor.ativo ?? 0) !== 1) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Este consultor está inativo.",
-          debug: {
-            emailEncontrado: consultor.email,
-            ativo: consultor.ativo,
-            role: consultor.role,
-          },
-        },
-        { status: 403 }
-      );
-    }
-
-    const role = String(consultor.role ?? "consultor");
-
-    const res = NextResponse.json({
-      ok: true,
-      consultor: {
-        id: Number(consultor.id),
-        nome: String(consultor.nome ?? ""),
-        email: String(consultor.email ?? ""),
-        role,
-      },
-    });
-
-    const isProd = process.env.NODE_ENV === "production";
-
-    res.cookies.set("consultor_id", String(consultor.id), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProd,
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    res.cookies.set("consultor_nome", String(consultor.nome ?? ""), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProd,
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    res.cookies.set("consultor_role", role, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProd,
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    return res;
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e?.message || "Erro no servidor." },
-      { status: 500 }
-    );
   }
+
+  return (
+    <div style={styles.page}>
+      <div style={styles.card}>
+        <h1 style={styles.title}>Login Consultores</h1>
+
+        {err && <div style={styles.err}>{err}</div>}
+
+        <form onSubmit={onSubmit} style={styles.form}>
+          <label style={styles.label}>Email</label>
+          <input
+            style={styles.input}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email do consultor"
+            autoComplete="email"
+          />
+
+          <label style={styles.label}>Password</label>
+          <input
+            type="password"
+            style={styles.input}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            autoComplete="current-password"
+          />
+
+          <button type="submit" style={styles.btn} disabled={loading}>
+            {loading ? "A entrar..." : "Entrar"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    padding: 20,
+    background:
+      "radial-gradient(1100px 650px at 50% 75%, rgba(25,70,140,0.55) 0%, rgba(10,16,28,1) 55%)",
+  },
+
+  card: {
+    width: "min(460px, 94vw)",
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(0,0,0,0.28)",
+    padding: 22,
+    color: "#fff",
+  },
+
+  title: {
+    margin: "0 0 18px",
+    fontSize: 28,
+    fontWeight: 950,
+  },
+
+  err: {
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    background: "rgba(255,0,0,0.10)",
+    border: "1px solid rgba(255,0,0,0.25)",
+    color: "#ffb4b4",
+  },
+
+  form: {
+    display: "grid",
+    gap: 10,
+  },
+
+  label: {
+    fontSize: 13,
+    opacity: 0.9,
+  },
+
+  input: {
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(0,0,0,0.35)",
+    color: "#fff",
+    outline: "none",
+  },
+
+  btn: {
+    marginTop: 10,
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(212,175,55,0.55)",
+    background: "linear-gradient(180deg, rgba(212,175,55,0.98) 0%, rgba(180,140,35,0.98) 100%)",
+    color: "#111",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+};
