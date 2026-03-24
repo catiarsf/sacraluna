@@ -1,5 +1,6 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
 import bcrypt from "bcryptjs";
 
 function norm(v: any) {
@@ -8,6 +9,8 @@ function norm(v: any) {
 
 export async function POST(req: Request) {
   try {
+    const { default: db } = await import("@/lib/db");
+
     const body = await req.json();
 
     const nome = norm(body?.nome);
