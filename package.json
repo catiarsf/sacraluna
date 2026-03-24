@@ -2,12 +2,13 @@
   "name": "sacraluna",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "concurrently -n NEXT,RT -c blue,green \"next dev\" \"node realtime/server.js\"",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
+  
+"scripts": {
+  "dev": "concurrently -n NEXT,RT -c blue,green \"next dev\" \"node realtime/server.js\"",
+  "build": "next build",
+  "start": "concurrently \"next start\" \"node realtime/server.js\"",
+  "lint": "eslint"
+},
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.6.2",
