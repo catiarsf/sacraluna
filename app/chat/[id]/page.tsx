@@ -75,6 +75,7 @@ export default function ChatPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [billedSeconds, setBilledSeconds] = useState(0);
   const [totalCharged, setTotalCharged] = useState(0);
+  const [consultorEarned, setConsultorEarned] = useState(0);
   const [chatStartedAt] = useState<number>(Date.now());
 
   const sockRef = useRef<Socket | null>(null);
@@ -170,8 +171,7 @@ export default function ChatPage() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, [sessionId, role, router]);
-
-  useEffect(() => {
+useEffect(() => {
     async function validarSessao() {
       if (!sessionId) return;
 
@@ -221,7 +221,8 @@ export default function ChatPage() {
 
     validarSessao();
   }, [sessionId, role, router]);
- useEffect(() => {
+
+  useEffect(() => {
     async function carregarInfo() {
       if (!Number.isFinite(consultorId) || consultorId <= 0 || !sessionId) return;
 
@@ -339,8 +340,7 @@ export default function ChatPage() {
         tocarAlertaSeAtivado();
       }
     });
-
-    socket.on("call_status", async (payload: any) => {
+socket.on("call_status", async (payload: any) => {
       if (!payload || payload.sessionId !== sessionId) return;
 
       if (payload.status === "rejected") {
@@ -435,6 +435,7 @@ export default function ChatPage() {
         setSaldoCliente(Number(json?.wallet_balance ?? 0));
         setBilledSeconds(Number(json?.billed_seconds ?? 0));
         setTotalCharged(Number(json?.total_charged_eur ?? 0));
+        setConsultorEarned(Number(json?.consultor_earned_eur ?? 0));
       } catch {
         setErr("Erro ao comunicar com a cobrança da sessão.");
       }
@@ -447,7 +448,8 @@ export default function ChatPage() {
       cobrarMinuto();
     }
   }, [elapsedSeconds, sessionId, sessionValidated]);
-useEffect(() => {
+
+  useEffect(() => {
     function endByBeacon() {
       if (!sessionId) return;
 
@@ -512,8 +514,7 @@ useEffect(() => {
     sockRef.current.emit("msg", payload);
     setText("");
   }
-
-  if (!Number.isFinite(consultorId) || consultorId <= 0) {
+ if (!Number.isFinite(consultorId) || consultorId <= 0) {
     return (
       <div style={styles.page}>
         <button style={styles.navBtn} onClick={() => router.push("/")}>
@@ -586,7 +587,7 @@ useEffect(() => {
           {role === "consultor" && (
             <div style={styles.infoRow}>
               <span style={styles.infoLabel}>Ganho da sessão</span>
-              <span style={styles.infoValue}>{(totalCharged * 0.4).toFixed(2)}€</span>
+              <span style={styles.infoValue}>{consultorEarned.toFixed(2)}€</span>
             </div>
           )}
 
@@ -753,4 +754,4 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     padding: "12px 16px",
   },
-};   
+};       

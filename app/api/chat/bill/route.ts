@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 function toNumber(v: any) {
   const n = Number.parseFloat(String(v ?? "0").replace(",", "."));
   return Number.isFinite(n) ? n : 0;
@@ -31,7 +33,6 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-
     const sessionId = String(
       body?.sessionId ?? body?.session_id ?? ""
     ).trim();
@@ -144,6 +145,32 @@ export async function POST(req: Request) {
       );
     }
 
+    const consultorInfo = db
+      .prepare(
+        `
+        SELECT id, percentagem
+        FROM consultores
+        WHERE id = ?
+        LIMIT 1
+        `
+      )
+      .get(chatSession.consultor_id) as any;
+
+    if (!consultorInfo) {
+      return NextResponse.json(
+        { ok: false, error: "Consultor não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    const percentagemConsultor = toNumber(
+      consultorInfo?.percentagem ?? 40
+    );
+
+    const ganhoConsultor = round2(
+      precoPorMin * (percentagemConsultor / 100)
+    );
+
     let walletConsultor = db
       .prepare(
         `
@@ -153,8 +180,8 @@ export async function POST(req: Request) {
         `
       )
       .get(chatSession.consultor_id) as any;
-
-    if (!walletConsultor) {
+ 
+      if (!walletConsultor) {
       const info = db
         .prepare(
           `
@@ -174,8 +201,6 @@ export async function POST(req: Request) {
         )
         .get(info.lastInsertRowid) as any;
     }
-
-    const ganhoConsultor = round2(precoPorMin * 0.4);
 
     const tx = db.transaction(() => {
       db.prepare(
@@ -231,7 +256,7 @@ export async function POST(req: Request) {
         walletConsultor.id,
         sessionId,
         ganhoConsultor,
-        "Ganho de 1 minuto de consulta"
+        `Ganho de 1 minuto de consulta (${percentagemConsultor}%)`
       );
     });
 
@@ -261,8 +286,13 @@ export async function POST(req: Request) {
       ok: true,
       wallet_balance: toNumber(walletCliente.balance_eur),
       billed_seconds: Number(sessaoAtualizada?.billed_seconds ?? 0),
-      total_charged_eur: toNumber(sessaoAtualizada?.total_charged_eur ?? 0),
-      consultor_earned_eur: toNumber(sessaoAtualizada?.consultor_earned_eur ?? 0),
+      total_charged_eur: toNumber(
+        sessaoAtualizada?.total_charged_eur ?? 0
+      ),
+      consultor_earned_eur: toNumber(
+        sessaoAtualizada?.consultor_earned_eur ?? 0
+      ),
+      percentagem_consultor: percentagemConsultor,
     });
   } catch (e: any) {
     console.error("ERRO /api/chat/bill:", e);
@@ -272,4 +302,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
+}     
