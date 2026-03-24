@@ -1,5 +1,6 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
 
 function norm(v: any) {
   return String(v ?? "").trim();
@@ -12,6 +13,8 @@ function toNumber(v: any) {
 
 export async function GET() {
   try {
+    const { db } = await import("@/lib/db");
+
     const servicos = db
       .prepare(
         `
@@ -47,6 +50,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const { db } = await import("@/lib/db");
+
     const body = await req.json().catch(() => ({}));
 
     const nome = norm(body?.nome);
