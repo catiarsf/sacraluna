@@ -1,7 +1,7 @@
 const http = require("http");
 const { Server } = require("socket.io");
 
-const PORT = Number(process.env.PORT || 3001);
+const PORT = Number(process.env.PORT);
 
 const allowedOrigins = [
   "http://localhost:3000",
