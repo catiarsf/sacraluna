@@ -1,20 +1,39 @@
+const http = require("http");
 const { Server } = require("socket.io");
 
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT || 3001);
 
-const io = new Server(PORT, {
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://sacraluna-production.up.railway.app",
+  "https://www.sacraluna.pt",
+  "https://sacraluna.pt",
+];
+
+const httpServer = http.createServer((req, res) => {
+  if (req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("ok");
+    return;
+  }
+
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("socket server running");
+});
+
+const io = new Server(httpServer, {
+  path: "/socket.io",
   cors: {
-    origin: [
-      "http://localhost:3000",
-      "https://sacraluna-production.up.railway.app",
-      "https://www.sacraluna.pt",
-    ],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`Origin não permitida: ${origin}`));
+    },
     methods: ["GET", "POST"],
     credentials: true,
   },
+  transports: ["websocket", "polling"],
 });
-
-console.log(`Socket server running on port ${PORT}`);
 
 const roomConsultor = (consultorId) => `consultor:${consultorId}`;
 const roomSession = (sessionId) => `session:${sessionId}`;
@@ -24,14 +43,12 @@ io.on("connection", (socket) => {
 
   socket.on("register_consultor", ({ consultorId }) => {
     if (!consultorId) return;
-
     socket.join(roomConsultor(consultorId));
     console.log(`consultor ${consultorId} joined ${roomConsultor(consultorId)}`);
   });
 
   socket.on("join", ({ sessionId }) => {
     if (!sessionId) return;
-
     socket.join(roomSession(sessionId));
     console.log(`socket ${socket.id} joined ${roomSession(sessionId)}`);
   });
@@ -50,8 +67,6 @@ io.on("connection", (socket) => {
   socket.on("call_request", ({ consultorId, sessionId, clienteNome }) => {
     if (!consultorId || !sessionId) return;
 
-    console.log(`call_request consultor=${consultorId} session=${sessionId}`);
-
     io.to(roomConsultor(consultorId)).emit("incoming_call", {
       consultorId: Number(consultorId),
       sessionId: String(sessionId),
@@ -69,8 +84,6 @@ io.on("connection", (socket) => {
   socket.on("call_accept", ({ consultorId, sessionId }) => {
     if (!consultorId || !sessionId) return;
 
-    console.log(`call_accept ${sessionId}`);
-
     io.to(roomSession(sessionId)).emit("call_status", {
       sessionId: String(sessionId),
       status: "accepted",
@@ -80,8 +93,6 @@ io.on("connection", (socket) => {
 
   socket.on("call_reject", ({ consultorId, sessionId }) => {
     if (!consultorId || !sessionId) return;
-
-    console.log(`call_reject ${sessionId}`);
 
     io.to(roomSession(sessionId)).emit("session_ended", {
       sessionId: String(sessionId),
@@ -93,8 +104,6 @@ io.on("connection", (socket) => {
   socket.on("session_end", ({ sessionId }) => {
     if (!sessionId) return;
 
-    console.log(`session_end ${sessionId}`);
-
     io.to(roomSession(sessionId)).emit("session_ended", {
       sessionId: String(sessionId),
       reason: "finished",
@@ -105,4 +114,8 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("socket disconnected:", socket.id);
   });
+});
+
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`Socket server running on port ${PORT}`);
 });
