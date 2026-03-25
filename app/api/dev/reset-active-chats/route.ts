@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
-export async function POST() {
+export async function GET() {
   try {
     const result = db.prepare(`
       UPDATE chat_sessions
