@@ -199,15 +199,28 @@ export async function POST(req: Request) {
       precoPorMin
     );
 
-    return NextResponse.json({
-      ok: true,
-      status: "pending",
-      session_id: chatSessionId,
-      consultor_id: consultorId,
-      preco_por_min: precoPorMin,
-      saldo_eur: saldo,
-      minutos_estimados: Math.floor(saldo / precoPorMin),
-    });
+    const inserted = db
+  .prepare(
+    `
+    SELECT id, cliente_id, consultor_id, status, created_at
+    FROM chat_sessions
+    WHERE id = ?
+    LIMIT 1
+    `
+  )
+  .get(chatSessionId) as any;
+
+return NextResponse.json({
+  ok: true,
+  status: "pending",
+  session_id: chatSessionId,
+  consultor_id: consultorId,
+  preco_por_min: precoPorMin,
+  saldo_eur: saldo,
+  minutos_estimados: Math.floor(saldo / precoPorMin),
+  debug_inserted: inserted ?? null,
+});
+
   } catch (e: any) {
     console.error("ERRO /api/chat/request:", e);
 
