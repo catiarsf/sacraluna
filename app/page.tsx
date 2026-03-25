@@ -284,11 +284,10 @@ function ConsultorCard({
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json?.ok) {
-        setWaitingText(null);
-        alert(json?.error || "Não foi possível pedir o chat.");
-        return;
-      }
-
+  setWaitingText(null);
+  alert("ERRO REAL: " + JSON.stringify(json));
+  return;
+}
       const sessionId = String(json?.session_id ?? "");
 
       if (!sessionId) {
