@@ -33,9 +33,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const sessionId = String(
-      body?.sessionId ?? body?.session_id ?? ""
-    ).trim();
+    const sessionId = String(body?.sessionId ?? body?.session_id ?? "").trim();
 
     if (!sessionId) {
       return NextResponse.json(
@@ -116,23 +114,25 @@ export async function POST(req: Request) {
     const saldoCliente = toNumber(walletCliente.balance_eur);
 
     if (saldoCliente < precoPorMin) {
-      db.prepare(
-        `
-        UPDATE chat_sessions
-        SET status = 'ended',
-            ended_at = strftime('%s','now')
-        WHERE id = ?
-        `
-      ).run(sessionId);
+      db.transaction(() => {
+        db.prepare(
+          `
+          UPDATE chat_sessions
+          SET status = 'ended',
+              ended_at = strftime('%s','now')
+          WHERE id = ?
+          `
+        ).run(sessionId);
 
-      db.prepare(
-        `
-        UPDATE consultores
-        SET ocupado = 0,
-            last_seen_at = strftime('%s','now')
-        WHERE id = ?
-        `
-      ).run(chatSession.consultor_id);
+        db.prepare(
+          `
+          UPDATE consultores
+          SET ocupado = 0,
+              last_seen_at = strftime('%s','now')
+          WHERE id = ?
+          `
+        ).run(chatSession.consultor_id);
+      })();
 
       return NextResponse.json(
         {
@@ -148,7 +148,7 @@ export async function POST(req: Request) {
     const consultorInfo = db
       .prepare(
         `
-        SELECT id, percentagem
+        SELECT id, percentagem_ganho
         FROM consultores
         WHERE id = ?
         LIMIT 1
@@ -164,7 +164,7 @@ export async function POST(req: Request) {
     }
 
     const percentagemConsultor = toNumber(
-      consultorInfo?.percentagem ?? 40
+      consultorInfo?.percentagem_ganho ?? 40
     );
 
     const ganhoConsultor = round2(
@@ -180,8 +180,8 @@ export async function POST(req: Request) {
         `
       )
       .get(chatSession.consultor_id) as any;
- 
-      if (!walletConsultor) {
+
+    if (!walletConsultor) {
       const info = db
         .prepare(
           `
@@ -218,11 +218,12 @@ export async function POST(req: Request) {
         `
         UPDATE wallets
         SET
+          balance_eur = balance_eur + ?,
           earned_eur = earned_eur + ?,
           updated_at = strftime('%s','now')
         WHERE id = ?
         `
-      ).run(ganhoConsultor, walletConsultor.id);
+      ).run(ganhoConsultor, ganhoConsultor, walletConsultor.id);
 
       db.prepare(
         `
@@ -272,6 +273,16 @@ export async function POST(req: Request) {
       )
       .get(walletCliente.id) as any;
 
+    walletConsultor = db
+      .prepare(
+        `
+        SELECT id, balance_eur, earned_eur
+        FROM wallets
+        WHERE id = ?
+        `
+      )
+      .get(walletConsultor.id) as any;
+
     const sessaoAtualizada = db
       .prepare(
         `
@@ -285,6 +296,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       wallet_balance: toNumber(walletCliente.balance_eur),
+      consultor_wallet_balance: toNumber(walletConsultor.balance_eur),
       billed_seconds: Number(sessaoAtualizada?.billed_seconds ?? 0),
       total_charged_eur: toNumber(
         sessaoAtualizada?.total_charged_eur ?? 0
@@ -302,4 +314,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}     
+}
