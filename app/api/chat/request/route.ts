@@ -82,7 +82,25 @@ export async function POST(req: Request) {
       );
     }
 
-    const alreadyActive = db
+    const now = Math.floor(Date.now() / 1000);
+
+    // Fecha sessões ativas antigas ou presas antes de criar novo pedido
+    db.prepare(
+      `
+      UPDATE chat_sessions
+      SET status = 'ended',
+          ended_at = ?
+      WHERE status = 'active'
+        AND consultor_id = ?
+        AND (
+          started_at IS NULL
+          OR started_at < ?
+        )
+      `
+    ).run(now, consultorId, now - 300);
+
+    // Fecha quaisquer sessões ativas antigas do mesmo cliente + consultor
+    const oldActiveSessions = db
       .prepare(
         `
         SELECT id
@@ -90,19 +108,21 @@ export async function POST(req: Request) {
         WHERE cliente_id = ?
           AND consultor_id = ?
           AND status = 'active'
-        LIMIT 1
         `
       )
-      .get(user.id, consultorId) as any;
+      .all(user.id, consultorId) as any[];
 
-    if (alreadyActive) {
-      return NextResponse.json({
-        ok: true,
-        status: "active",
-        session_id: alreadyActive.id,
-        consultor_id: consultorId,
-        preco_por_min: toNumber(consultor.preco_por_min),
-      });
+    if (oldActiveSessions.length > 0) {
+      for (const row of oldActiveSessions) {
+        db.prepare(
+          `
+          UPDATE chat_sessions
+          SET status = 'ended',
+              ended_at = ?
+          WHERE id = ?
+          `
+        ).run(now, row.id);
+      }
     }
 
     const alreadyPendingSamePair = db
@@ -199,28 +219,15 @@ export async function POST(req: Request) {
       precoPorMin
     );
 
-    const inserted = db
-  .prepare(
-    `
-    SELECT id, cliente_id, consultor_id, status, created_at
-    FROM chat_sessions
-    WHERE id = ?
-    LIMIT 1
-    `
-  )
-  .get(chatSessionId) as any;
-
-return NextResponse.json({
-  ok: true,
-  status: "pending",
-  session_id: chatSessionId,
-  consultor_id: consultorId,
-  preco_por_min: precoPorMin,
-  saldo_eur: saldo,
-  minutos_estimados: Math.floor(saldo / precoPorMin),
-  debug_inserted: inserted ?? null,
-});
-
+    return NextResponse.json({
+      ok: true,
+      status: "pending",
+      session_id: chatSessionId,
+      consultor_id: consultorId,
+      preco_por_min: precoPorMin,
+      saldo_eur: saldo,
+      minutos_estimados: Math.floor(saldo / precoPorMin),
+    });
   } catch (e: any) {
     console.error("ERRO /api/chat/request:", e);
 
