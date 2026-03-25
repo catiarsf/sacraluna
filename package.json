@@ -4,11 +4,12 @@
   "private": true,
   
 "scripts": {
-  "dev": "concurrently -n NEXT,RT -c blue,green \"next dev\" \"node realtime/server.js\"",
+  "dev": "next dev",
   "build": "next build",
-  "start": "concurrently \"next start\" \"node realtime/server.js\"",
+  "start": "next start",
   "lint": "eslint"
 },
+
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.6.2",
