@@ -13,6 +13,8 @@ type Consultor = {
   apresentacao: string | null;
   ativo: number;
   destaque?: number;
+  online?: number;
+  ocupado?: number;
 };
 
 function normalizeFotoUrl(url: string | null) {
@@ -22,6 +24,10 @@ function normalizeFotoUrl(url: string | null) {
   if (u.startsWith("http://") || u.startsWith("https://")) return u;
   if (!u.startsWith("/")) return `/${u}`;
   return u;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export default function ConsultorPerfilPage() {
@@ -39,6 +45,9 @@ export default function ConsultorPerfilPage() {
   const [err, setErr] = useState<string | null>(null);
   const [consultor, setConsultor] = useState<Consultor | null>(null);
 
+  const [creatingChat, setCreatingChat] = useState(false);
+  const [waitingText, setWaitingText] = useState<string | null>(null);
+
   useEffect(() => {
     if (!idStr || !Number.isFinite(idNum) || idNum <= 0) {
       setLoading(false);
@@ -49,11 +58,11 @@ export default function ConsultorPerfilPage() {
     setLoading(true);
     setErr(null);
 
-    fetch(`/api/consultores/${idNum}`)
+    fetch(`/api/consultores/${idNum}`, { cache: "no-store" })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || `Erro (${res.status})`);
-        return data as Consultor; // a tua API devolve o objeto direto
+        return data as Consultor;
       })
       .then((c) => setConsultor(c))
       .catch((e) => setErr(e?.message || "Erro ao carregar consultor"))
@@ -66,6 +75,140 @@ export default function ConsultorPerfilPage() {
     const t = consultor?.apresentacao ?? "";
     return (t || "").trim();
   }, [consultor]);
+
+  async function iniciarPedidoChat() {
+    if (!consultor) return;
+
+    const ativo = Number(consultor.ativo ?? 0) === 1;
+    const online = Number(consultor.online ?? 0) === 1;
+    const ocupado = Number(consultor.ocupado ?? 0) === 1;
+
+    if (!ativo || !online || ocupado) {
+      alert("Este consultor não está disponível neste momento.");
+      return;
+    }
+
+    try {
+      setCreatingChat(true);
+      setWaitingText("A enviar pedido para a consultora...");
+
+      const res = await fetch("/api/chat/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          consultor_id: consultor.id,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.ok) {
+        setWaitingText(null);
+        alert(json?.error || "Não foi possível pedir o chat.");
+        return;
+      }
+
+      const sessionId = String(json?.session_id ?? "");
+
+      if (!sessionId) {
+        setWaitingText(null);
+        alert("Sessão inválida.");
+        return;
+      }
+
+      if (json?.status === "active") {
+        router.push(
+          `/chat/${consultor.id}?session=${encodeURIComponent(sessionId)}&role=cliente`
+        );
+        return;
+      }
+
+      setWaitingText("A aguardar resposta da consultora...");
+
+      for (let i = 0; i < 40; i++) {
+        await sleep(3000);
+
+        const statusRes = await fetch(
+          `/api/chat/session-status?session_id=${encodeURIComponent(sessionId)}`,
+          { cache: "no-store" }
+        );
+
+        const statusJson = await statusRes.json().catch(() => ({}));
+
+        if (!statusRes.ok || !statusJson?.ok) {
+          continue;
+        }
+
+        const status = String(statusJson?.session?.status ?? "");
+
+        if (status === "active") {
+          setWaitingText(null);
+          router.push(
+            `/chat/${consultor.id}?session=${encodeURIComponent(sessionId)}&role=cliente`
+          );
+          return;
+        }
+
+        if (status === "rejected") {
+          setWaitingText(null);
+          alert("A consultora rejeitou o pedido.");
+          return;
+        }
+
+        if (status === "ended") {
+          setWaitingText(null);
+          alert("A sessão terminou antes de começar.");
+          return;
+        }
+      }
+
+      setWaitingText(null);
+      alert("A consultora não respondeu a tempo.");
+    } catch {
+      setWaitingText(null);
+      alert("Erro ao iniciar pedido de chat.");
+    } finally {
+      setCreatingChat(false);
+    }
+  }
+
+  async function iniciarChamadaVoz() {
+    if (!consultor) return;
+
+    const ativo = Number(consultor.ativo ?? 0) === 1;
+    const online = Number(consultor.online ?? 0) === 1;
+    const ocupado = Number(consultor.ocupado ?? 0) === 1;
+
+    if (!ativo || !online || ocupado) {
+      alert("Este consultor não está disponível neste momento.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/twilio/call", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          consultorId: consultor.id,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.ok) {
+        alert(data?.error || "Não foi possível iniciar a chamada.");
+        return;
+      }
+
+      alert("A chamada está a ser iniciada. A consultora será contactada primeiro.");
+    } catch {
+      alert("Erro ao iniciar chamada.");
+    }
+  }
 
   return (
     <div style={styles.page}>
@@ -97,8 +240,27 @@ export default function ConsultorPerfilPage() {
 
             <div style={styles.right}>
               <h2 style={styles.name}>{consultor.nome}</h2>
-              <div style={styles.status}>
-                {consultor.ativo ? "Disponível" : "Indisponível"}
+
+              <div
+                style={{
+                  ...styles.status,
+                  color:
+                    Number(consultor.ativo ?? 0) !== 1
+                      ? "#ff7b7b"
+                      : Number(consultor.online ?? 0) !== 1
+                      ? "#c7c7c7"
+                      : Number(consultor.ocupado ?? 0) === 1
+                      ? "#ffd36b"
+                      : "#7dffb1",
+                }}
+              >
+                {Number(consultor.ativo ?? 0) !== 1
+                  ? "Indisponível"
+                  : Number(consultor.online ?? 0) !== 1
+                  ? "Offline"
+                  : Number(consultor.ocupado ?? 0) === 1
+                  ? "Ocupado"
+                  : "Disponível"}
               </div>
 
               <div style={styles.priceRow}>
@@ -112,17 +274,20 @@ export default function ConsultorPerfilPage() {
                 <div style={styles.spec}>{consultor.especialidades}</div>
               ) : null}
 
+              {waitingText ? (
+                <div style={styles.waitingBox}>{waitingText}</div>
+              ) : null}
+
               <div style={styles.btns}>
                 <button
                   style={styles.btnGold}
-                  onClick={() => router.push(`/chat/${consultor.id}`)}
+                  onClick={iniciarPedidoChat}
+                  disabled={creatingChat}
                 >
-                  Iniciar Chat
+                  {creatingChat ? "AGUARDA..." : "Iniciar Chat"}
                 </button>
-                <button
-                  style={styles.btnBlue}
-                  onClick={() => router.push(`/voz/${consultor.id}`)}
-                >
+
+                <button style={styles.btnBlue} onClick={iniciarChamadaVoz}>
                   Chamada de Voz
                 </button>
               </div>
@@ -131,7 +296,9 @@ export default function ConsultorPerfilPage() {
 
               <h3 style={styles.h3}>Apresentação</h3>
               <p style={styles.p}>
-                {textoApresentacao ? textoApresentacao : "(Ainda sem apresentação.)"}
+                {textoApresentacao
+                  ? textoApresentacao
+                  : "(Ainda sem apresentação.)"}
               </p>
             </div>
           </div>
@@ -187,7 +354,12 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(212,175,55,0.25)",
     background: "rgba(0,0,0,0.20)",
   },
-  image: { width: "100%", height: "100%", objectFit: "cover", display: "block" },
+  image: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
   placeholder: {
     height: "100%",
     display: "grid",
@@ -195,12 +367,26 @@ const styles: Record<string, React.CSSProperties> = {
     opacity: 0.85,
   },
   name: { margin: 0, fontSize: 26, fontWeight: 950 },
-  status: { marginTop: 6, fontSize: 13, fontWeight: 900, color: "#7dffb1" },
+  status: { marginTop: 6, fontSize: 13, fontWeight: 900 },
   priceRow: { marginTop: 10, display: "flex", alignItems: "baseline", gap: 8 },
   priceValue: { fontSize: 24, fontWeight: 950, color: "#f4d78b" },
   priceUnit: { fontSize: 13, opacity: 0.8 },
   spec: { marginTop: 10, opacity: 0.9 },
-  btns: { marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
+  waitingBox: {
+    marginTop: 14,
+    padding: "12px 14px",
+    borderRadius: 12,
+    background: "rgba(212,175,55,0.10)",
+    border: "1px solid rgba(212,175,55,0.35)",
+    color: "#f4d78b",
+    fontWeight: 700,
+  },
+  btns: {
+    marginTop: 14,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+  },
   btnGold: {
     padding: "11px 10px",
     borderRadius: 12,
