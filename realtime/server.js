@@ -9,17 +9,24 @@ const allowedOrigins = [
   "https://sacraluna.pt",
   process.env.NEXT_PUBLIC_SITE_URL,
   process.env.PUBLIC_SITE_URL,
+  process.env.NEXT_PUBLIC_SOCKET_URL,
 ].filter(Boolean);
 
 const httpServer = http.createServer((req, res) => {
   if (req.url === "/health") {
-    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("ok");
     return;
   }
 
-  res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("socket server running");
+  if (req.url === "/") {
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("socket server running");
+    return;
+  }
+
+  res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end("not found");
 });
 
 const io = new Server(httpServer, {
@@ -44,18 +51,20 @@ io.on("connection", (socket) => {
 
   socket.on("register_consultor", ({ consultorId }) => {
     if (!consultorId) return;
+
     socket.join(roomConsultor(consultorId));
     console.log(`consultor ${consultorId} joined ${roomConsultor(consultorId)}`);
   });
 
   socket.on("join", ({ sessionId }) => {
     if (!sessionId) return;
+
     socket.join(roomSession(sessionId));
     console.log(`socket ${socket.id} joined ${roomSession(sessionId)}`);
   });
 
   socket.on("msg", (data) => {
-    if (!data || !data.sessionId || !data.text) return;
+    if (!data?.sessionId || !data?.text) return;
 
     io.to(roomSession(data.sessionId)).emit("msg", {
       sessionId: String(data.sessionId),
