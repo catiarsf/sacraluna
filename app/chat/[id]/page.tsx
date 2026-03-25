@@ -171,7 +171,30 @@ export default function ChatPage() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, [sessionId, role, router]);
-useEffect(() => {
+ useEffect(() => {
+    if (!sessionId) {
+      setErr("Sessão em falta. Inicia o chat a partir da página principal.");
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    function onStorage(ev: StorageEvent) {
+      if (ev.key !== "sacraluna_session_end" || !ev.newValue) return;
+
+      try {
+        const data = JSON.parse(ev.newValue);
+        if (data?.sessionId !== sessionId) return;
+
+        alert("A consulta terminou.");
+        goBackToArea();
+      } catch {}
+    }
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [sessionId, role, router]);
+
+  useEffect(() => {
     async function validarSessao() {
       if (!sessionId) return;
 
@@ -245,7 +268,9 @@ useEffect(() => {
         setConsultor({
           id: Number(c?.id ?? consultorId),
           nome: String(c?.nome ?? `Consultor ${consultorId}`),
-          valor_min_eur: Number(c?.valor_min_eur ?? c?.preco_por_min ?? c?.valor_min ?? 0),
+          valor_min_eur: Number(
+            c?.valor_min_eur ?? c?.preco_por_min ?? c?.valor_min ?? 0
+          ),
           ativo: Number(c?.ativo ?? 0),
         });
 
@@ -275,8 +300,7 @@ useEffect(() => {
       carregarInfo();
     }
   }, [consultorId, router, sessionId, role, sessionValidated]);
-
-  useEffect(() => {
+   useEffect(() => {
     if (!sessionId || !sessionValidated) return;
 
     setErr(null);
@@ -324,20 +348,20 @@ useEffect(() => {
       );
     });
 
-socket.on("msg", (m: any) => {
-  if (!m?.text) return;
+    socket.on("msg", (m: any) => {
+      if (!m?.text) return;
 
-  const msg: Msg = {
-    sessionId: m.sessionId,
-    text: m.text,
-    senderRole: m.senderRole === "consultor" ? "consultor" : "cliente",
-    at: m.at || Date.now(),
-  };
+      const msg: Msg = {
+        sessionId: m.sessionId,
+        text: m.text,
+        senderRole: m.senderRole === "consultor" ? "consultor" : "cliente",
+        at: m.at || Date.now(),
+      };
 
-  setMsgs((prev) => [...prev, msg]);
-});
+      setMsgs((prev) => [...prev, msg]);
+    });
 
-socket.on("call_status", async (payload: any) => {
+    socket.on("call_status", async (payload: any) => {
       if (!payload || payload.sessionId !== sessionId) return;
 
       if (payload.status === "rejected") {
@@ -441,7 +465,11 @@ socket.on("call_status", async (payload: any) => {
 
     const minutosDecorridos = Math.floor(elapsedSeconds / 60);
 
-    if (sessionId && minutosDecorridos > 0 && minutosDecorridos > billedMinutesRef.current) {
+    if (
+      sessionId &&
+      minutosDecorridos > 0 &&
+      minutosDecorridos > billedMinutesRef.current
+    ) {
       billedMinutesRef.current = minutosDecorridos;
       cobrarMinuto();
     }
@@ -467,8 +495,7 @@ socket.on("call_status", async (payload: any) => {
       window.removeEventListener("beforeunload", endByBeacon);
     };
   }, [sessionId]);
-
-  async function terminarConsulta() {
+ async function terminarConsulta() {
     if (!sessionId || endingRef.current) return;
 
     endingRef.current = true;
@@ -512,7 +539,8 @@ socket.on("call_status", async (payload: any) => {
     sockRef.current.emit("msg", payload);
     setText("");
   }
- if (!Number.isFinite(consultorId) || consultorId <= 0) {
+
+  if (!Number.isFinite(consultorId) || consultorId <= 0) {
     return (
       <div style={styles.page}>
         <button style={styles.navBtn} onClick={() => router.push("/")}>
@@ -532,7 +560,10 @@ socket.on("call_status", async (payload: any) => {
         <button style={styles.navBtn} onClick={() => router.push("/")}>
           ← Início
         </button>
-        <button style={styles.navBtn} onClick={() => router.push(`/consultores/${consultorId}`)}>
+        <button
+          style={styles.navBtn}
+          onClick={() => router.push(`/consultores/${consultorId}`)}
+        >
           ← Perfil
         </button>
         <button style={styles.endBtn} onClick={terminarConsulta}>
@@ -543,12 +574,16 @@ socket.on("call_status", async (payload: any) => {
       <h1 style={styles.h1}>Chat</h1>
 
       {loadingInfo ? (
-        <div style={{ opacity: 0.8, marginBottom: 12 }}>A carregar informações da sessão…</div>
+        <div style={{ opacity: 0.8, marginBottom: 12 }}>
+          A carregar informações da sessão…
+        </div>
       ) : (
         <div style={styles.infoCard}>
           <div style={styles.infoRow}>
             <span style={styles.infoLabel}>Consultor</span>
-            <span style={styles.infoValue}>{consultor?.nome ?? `Consultor ${consultorId}`}</span>
+            <span style={styles.infoValue}>
+              {consultor?.nome ?? `Consultor ${consultorId}`}
+            </span>
           </div>
 
           <div style={styles.infoRow}>
@@ -598,7 +633,12 @@ socket.on("call_status", async (payload: any) => {
 
           <div style={styles.infoRow}>
             <span style={styles.infoLabel}>Estado</span>
-            <span style={{ ...styles.infoValue, color: connected ? "#7dffb1" : "#ff9a9a" }}>
+            <span
+              style={{
+                ...styles.infoValue,
+                color: connected ? "#7dffb1" : "#ff9a9a",
+              }}
+            >
               {connected ? "Online" : "Offline"}
             </span>
           </div>
@@ -620,7 +660,11 @@ socket.on("call_status", async (payload: any) => {
               }}
             >
               <div style={styles.msgRole}>
-                {m.senderRole === role ? "Tu" : role === "consultor" ? "Cliente" : "Consultor"}
+                {m.senderRole === role
+                  ? "Tu"
+                  : role === "consultor"
+                  ? "Cliente"
+                  : "Consultor"}
               </div>
               <div style={styles.msgText}>{m.text}</div>
               <div style={styles.msgTime}>{new Date(m.at).toLocaleTimeString()}</div>
@@ -752,4 +796,4 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     padding: "12px 16px",
   },
-};       
+}; 

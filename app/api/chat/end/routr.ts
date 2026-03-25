@@ -46,7 +46,8 @@ export async function POST(req: Request) {
     }
 
     const isCliente = !!user?.id && Number(row.cliente_id) === Number(user.id);
-    const isConsultor = !!consultorIdCookie && Number(row.consultor_id) === Number(consultorIdCookie);
+    const isConsultor =
+      !!consultorIdCookie && Number(row.consultor_id) === Number(consultorIdCookie);
 
     if (!isCliente && !isConsultor) {
       return NextResponse.json(
@@ -59,6 +60,8 @@ export async function POST(req: Request) {
       return NextResponse.json({
         ok: true,
         already_ended: true,
+        session_id: sessionId,
+        status: "ended",
       });
     }
 
@@ -78,6 +81,7 @@ export async function POST(req: Request) {
         `
         UPDATE consultores
         SET ocupado = 0,
+            online = 1,
             last_seen_at = ?
         WHERE id = ?
         `
@@ -88,6 +92,7 @@ export async function POST(req: Request) {
       ok: true,
       session_id: sessionId,
       status: "ended",
+      consultor_id: row.consultor_id,
     });
   } catch (e: any) {
     console.error("ERRO /api/chat/end:", e);
