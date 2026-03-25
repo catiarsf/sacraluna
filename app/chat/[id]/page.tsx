@@ -324,22 +324,19 @@ useEffect(() => {
       );
     });
 
-    socket.on("msg", (m: any) => {
-      if (!m?.text) return;
+socket.on("msg", (m: any) => {
+  if (!m?.text) return;
 
-      const msg: Msg = {
-        sessionId: m.sessionId,
-        text: m.text,
-        senderRole: m.senderRole === "consultor" ? "consultor" : "cliente",
-        at: m.at || Date.now(),
-      };
+  const msg: Msg = {
+    sessionId: m.sessionId,
+    text: m.text,
+    senderRole: m.senderRole === "consultor" ? "consultor" : "cliente",
+    at: m.at || Date.now(),
+  };
 
-      setMsgs((prev) => [...prev, msg]);
+  setMsgs((prev) => [...prev, msg]);
+});
 
-      if (m.senderRole !== role) {
-        tocarAlertaSeAtivado();
-      }
-    });
 socket.on("call_status", async (payload: any) => {
       if (!payload || payload.sessionId !== sessionId) return;
 
@@ -403,6 +400,7 @@ socket.on("call_status", async (payload: any) => {
 
   useEffect(() => {
     if (!sessionValidated) return;
+    if (role !== "cliente") return;
 
     async function cobrarMinuto() {
       try {
@@ -447,7 +445,7 @@ socket.on("call_status", async (payload: any) => {
       billedMinutesRef.current = minutosDecorridos;
       cobrarMinuto();
     }
-  }, [elapsedSeconds, sessionId, sessionValidated]);
+  }, [elapsedSeconds, sessionId, sessionValidated, role]);
 
   useEffect(() => {
     function endByBeacon() {
