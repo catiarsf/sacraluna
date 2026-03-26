@@ -1,28 +1,18 @@
-import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import db from "@/lib/db";
-
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+import { NextResponse } from "next/server";
+import db from "@/lib/db";
+
+export async function GET(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
+    const { searchParams } = new URL(req.url);
 
-    const token = String(body?.token ?? "").trim();
-    const email = String(body?.email ?? "").trim().toLowerCase();
-    const nome = String(body?.nome ?? "Administrador").trim();
-    const password = String(body?.password ?? "");
+    const token = searchParams.get("token");
+    const email = searchParams.get("email");
+    const nome = searchParams.get("nome");
+    const password = searchParams.get("password");
 
-    const expectedToken = String(process.env.ADMIN_RECOVERY_TOKEN ?? "").trim();
-
-    if (!expectedToken) {
-      return NextResponse.json(
-        { ok: false, error: "ADMIN_RECOVERY_TOKEN não configurado." },
-        { status: 500 }
-      );
-    }
-
-    if (!token || token !== expectedToken) {
+    if (token !== process.env.ADMIN_RECOVERY_TOKEN) {
       return NextResponse.json(
         { ok: false, error: "Token inválido." },
         { status: 403 }
@@ -31,64 +21,44 @@ export async function POST(req: Request) {
 
     if (!email || !password) {
       return NextResponse.json(
-        { ok: false, error: "Email e password são obrigatórios." },
+        { ok: false, error: "Email ou password em falta." },
         { status: 400 }
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-
     const existing = db
-      .prepare(
-        `
-        SELECT id, email, role
-        FROM users
-        WHERE lower(email) = ?
-        LIMIT 1
-        `
-      )
+      .prepare(`SELECT id FROM users WHERE email = ?`)
       .get(email) as any;
 
     if (existing) {
       db.prepare(
         `
         UPDATE users
-        SET
-          nome = ?,
-          password_hash = ?,
-          role = 'admin'
-        WHERE id = ?
+        SET password = ?, role = 'admin'
+        WHERE email = ?
         `
-      ).run(nome, passwordHash, existing.id);
+      ).run(password, email);
 
       return NextResponse.json({
         ok: true,
         action: "updated",
-        user_id: Number(existing.id),
-        email,
-        role: "admin",
       });
     }
 
-    const info = db
-      .prepare(
-        `
-        INSERT INTO users (nome, email, password_hash, role, created_at)
-        VALUES (?, ?, ?, 'admin', strftime('%s','now'))
-        `
-      )
-      .run(nome, email, passwordHash);
+    db.prepare(
+      `
+      INSERT INTO users (email, password, nome, role)
+      VALUES (?, ?, ?, 'admin')
+      `
+    ).run(email, password, nome || "Admin");
 
     return NextResponse.json({
       ok: true,
       action: "created",
-      user_id: Number(info.lastInsertRowid),
-      email,
-      role: "admin",
     });
   } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: e?.message || "Erro ao recuperar admin." },
+      { ok: false, error: e?.message || "Erro interno" },
       { status: 500 }
     );
   }
