@@ -28,6 +28,13 @@ function toNumber(v: any) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function makeCallSessionId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `call-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 export async function POST(req: Request) {
   try {
     const { client, twilioPhoneNumber, siteUrl } = getTwilioConfig();
@@ -161,6 +168,21 @@ export async function POST(req: Request) {
       );
     }
 
+    const callSessionId = makeCallSessionId();
+    const now = Math.floor(Date.now() / 1000);
+
+    const connectUrl =
+      `${siteUrl}/api/twilio/connect` +
+      `?consultorId=${consultorId}` +
+      `&clienteId=${session.user.id}` +
+      `&callSessionId=${encodeURIComponent(callSessionId)}`;
+
+    const statusCallbackUrl =
+      `${siteUrl}/api/twilio/status` +
+      `?consultorId=${consultorId}` +
+      `&clienteId=${session.user.id}` +
+      `&callSessionId=${encodeURIComponent(callSessionId)}`;
+
     // Marca a consultora como ocupada logo ao arrancar a chamada
     db.prepare(`
       UPDATE consultores
@@ -169,16 +191,7 @@ export async function POST(req: Request) {
       WHERE id = ?
     `).run(consultorId);
 
-    const connectUrl =
-      `${siteUrl}/api/twilio/connect` +
-      `?consultorId=${consultorId}` +
-      `&clienteId=${session.user.id}`;
-
-    const statusCallbackUrl =
-      `${siteUrl}/api/twilio/status` +
-      `?consultorId=${consultorId}`;
-
-    // A chamada inicial vai para a CONSULTORA
+    // Liga primeiro à consultora
     const call = await client.calls.create({
       to: consultor.telefone,
       from: twilioPhoneNumber,
@@ -186,12 +199,38 @@ export async function POST(req: Request) {
       method: "POST",
       statusCallback: statusCallbackUrl,
       statusCallbackMethod: "POST",
-      statusCallbackEvent: ["completed", "busy", "no-answer", "failed"],
+      statusCallbackEvent: ["initiated", "ringing", "answered", "completed", "busy", "no-answer", "failed"],
     });
+
+    db.prepare(`
+      INSERT INTO call_sessions (
+        id,
+        consultor_id,
+        cliente_id,
+        cliente_nome,
+        status,
+        call_sid,
+        duration_seconds,
+        recording_url,
+        created_at,
+        started_at,
+        ended_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, NULL)
+    `).run(
+      callSessionId,
+      consultorId,
+      session.user.id,
+      String(cliente.nome ?? "Cliente"),
+      "initiated",
+      String(call.sid),
+      now
+    );
 
     return NextResponse.json({
       ok: true,
       sid: call.sid,
+      call_session_id: callSessionId,
       message: "A chamada está a ser iniciada. A consultora será contactada primeiro.",
     });
   } catch (e: any) {
