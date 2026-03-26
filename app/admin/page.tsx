@@ -1,20 +1,20 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
 import AdminClient from "./AdminClient";
 
 export default async function AdminPage() {
-  const cookieStore = await cookies();
+  const session = await getSession();
 
-  const consultorId = cookieStore.get("consultor_id")?.value;
-  const consultorRole = cookieStore.get("consultor_role")?.value;
-
-  if (!consultorId) {
-    redirect("/login-consultor");
+  // ❌ não está logada
+  if (!session?.user) {
+    redirect("/admin-login");
   }
 
-  if (consultorRole !== "admin") {
-    redirect("/");
+  // ❌ não é admin
+  if (session.user.role !== "admin") {
+    redirect("/admin-login");
   }
 
+  // ✅ é admin → entra no painel real
   return <AdminClient />;
 }
