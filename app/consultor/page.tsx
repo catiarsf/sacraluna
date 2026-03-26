@@ -28,13 +28,60 @@ type PendingChat = {
   created_at: number;
 } | null;
 
+type HistoryMessage = {
+  sender_role: "cliente" | "consultor";
+  text: string;
+  sent_at: number;
+};
+
+type HistorySession = {
+  id: string;
+  cliente_nome: string;
+  created_at: number;
+  started_at: number;
+  ended_at: number;
+  billed_seconds: number;
+  total_charged_eur: number;
+  consultor_earned_eur: number;
+  status: string;
+  messages: HistoryMessage[];
+};
+
+function formatDateTime(ts?: number) {
+  if (!ts) return "-";
+  return new Date(ts * 1000).toLocaleString("pt-PT");
+}
+
+function formatOnlyDate(ts?: number) {
+  if (!ts) return "-";
+  return new Date(ts * 1000).toLocaleDateString("pt-PT");
+}
+
+function formatOnlyTime(ts?: number) {
+  if (!ts) return "-";
+  return new Date(ts * 1000).toLocaleTimeString("pt-PT");
+}
+
+function formatDuration(totalSeconds?: number) {
+  const s = Number(totalSeconds ?? 0);
+  const mins = Math.floor(s / 60);
+  const secs = s % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
 export default function ConsultorPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
+
   const [consultorNome, setConsultorNome] = useState("Consultor");
   const [consultorId, setConsultorId] = useState<number | null>(null);
+
+  const [fotoUrl, setFotoUrl] = useState("");
+  const [apresentacao, setApresentacao] = useState("");
+  const [especialidades, setEspecialidades] = useState("");
 
   const [walletData, setWalletData] = useState<WalletData | null>(null);
 
@@ -42,9 +89,18 @@ export default function ConsultorPage() {
   const [ocupado, setOcupado] = useState(false);
   const [alertasAtivos, setAlertasAtivos] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   const [pendingChat, setPendingChat] = useState<PendingChat>(null);
   const [responding, setResponding] = useState(false);
+
+  const [history, setHistory] = useState<HistorySession[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [expandedSessionId, setExpandedSessionId] = useState<string>("");
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
 
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastAlertedSessionRef = useRef<string>("");
@@ -79,11 +135,42 @@ export default function ConsultorPage() {
       setOnline(Number(jsonMe?.consultor?.online ?? 0) === 1);
       setOcupado(Number(jsonMe?.consultor?.ocupado ?? 0) === 1);
 
+      setFotoUrl(String(jsonMe?.consultor?.foto_url ?? ""));
+      setApresentacao(String(jsonMe?.consultor?.apresentacao ?? ""));
+      setEspecialidades(String(jsonMe?.consultor?.especialidades ?? ""));
+
       setWalletData(jsonWallet);
     } catch (e: any) {
       setErro(e?.message || "Erro ao carregar página do consultor.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function carregarHistorico() {
+    try {
+      setHistoryLoading(true);
+
+      const res = await fetch("/api/consultor/history", {
+        cache: "no-store",
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (res.status === 401) {
+        router.push("/login-consultor");
+        return;
+      }
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Erro ao carregar histórico.");
+      }
+
+      setHistory(Array.isArray(json?.sessions) ? json.sessions : []);
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao carregar histórico.");
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
@@ -115,6 +202,7 @@ export default function ConsultorPage() {
 
   useEffect(() => {
     carregarDados();
+    carregarHistorico();
   }, []);
 
   useEffect(() => {
@@ -156,6 +244,7 @@ export default function ConsultorPage() {
     try {
       setStatusLoading(true);
       setErro("");
+      setSucesso("");
 
       const res = await fetch("/api/consultor/status", {
         method: "POST",
@@ -223,6 +312,7 @@ export default function ConsultorPage() {
     try {
       setResponding(true);
       setErro("");
+      setSucesso("");
 
       const res = await fetch("/api/chat/respond", {
         method: "POST",
@@ -267,6 +357,72 @@ export default function ConsultorPage() {
     }
   }
 
+  async function guardarPerfil() {
+    try {
+      setProfileSaving(true);
+      setErro("");
+      setSucesso("");
+
+      const res = await fetch("/api/consultor/profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          foto_url: fotoUrl,
+          apresentacao: apresentacao,
+          especialidades: especialidades,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Erro ao guardar perfil.");
+      }
+
+      setSucesso("Perfil atualizado com sucesso.");
+      await carregarDados();
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao guardar perfil.");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function alterarPassword() {
+    try {
+      setPasswordSaving(true);
+      setErro("");
+      setSucesso("");
+
+      const res = await fetch("/api/consultor/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Erro ao alterar password.");
+      }
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setSucesso("Password alterada com sucesso.");
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao alterar password.");
+    } finally {
+      setPasswordSaving(false);
+    }
+  }
+
   const ganhosHoje = Number(walletData?.stats?.ganhos_hoje_eur ?? 0);
   const ganhosTotais = Number(walletData?.wallet?.earned_eur ?? 0);
   const saldoDisponivel = Number(walletData?.wallet?.balance_eur ?? 0);
@@ -288,7 +444,8 @@ export default function ConsultorPage() {
   return (
     <main style={styles.page}>
       <h1 style={styles.h1}>Área do Consultor</h1>
-      {erro && <p style={styles.error}>{erro}</p>}
+      {erro ? <p style={styles.error}>{erro}</p> : null}
+      {sucesso ? <p style={styles.success}>{sucesso}</p> : null}
 
       {pendingChat && online && !ocupado && (
         <div style={styles.pendingBox}>
@@ -386,6 +543,132 @@ export default function ConsultorPage() {
           <div style={styles.cardLabel}>Consultas totais</div>
           <div style={styles.cardValue}>{consultasTotal}</div>
         </div>
+      </div>
+
+      <div style={styles.sectionCard}>
+        <h2 style={styles.h2}>Editar perfil</h2>
+
+        <label style={styles.label}>Foto (URL)</label>
+        <input
+          value={fotoUrl}
+          onChange={(e) => setFotoUrl(e.target.value)}
+          style={styles.input}
+          placeholder="https://..."
+        />
+
+        <label style={styles.label}>Especialidades</label>
+        <textarea
+          value={especialidades}
+          onChange={(e) => setEspecialidades(e.target.value)}
+          style={styles.textarea}
+          placeholder="Tarot, Baralho Cigano, Mesa Radiónica..."
+        />
+
+        <label style={styles.label}>Apresentação</label>
+        <textarea
+          value={apresentacao}
+          onChange={(e) => setApresentacao(e.target.value)}
+          style={styles.textarea}
+          placeholder="Escreve aqui a tua apresentação..."
+        />
+
+        <button style={styles.primaryBtn} onClick={guardarPerfil} disabled={profileSaving}>
+          {profileSaving ? "A guardar..." : "Guardar perfil"}
+        </button>
+      </div>
+
+      <div style={styles.sectionCard}>
+        <h2 style={styles.h2}>Alterar password</h2>
+
+        <label style={styles.label}>Password atual</label>
+        <input
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          style={styles.input}
+        />
+
+        <label style={styles.label}>Nova password</label>
+        <input
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          style={styles.input}
+        />
+
+        <button style={styles.primaryBtn} onClick={alterarPassword} disabled={passwordSaving}>
+          {passwordSaving ? "A alterar..." : "Alterar password"}
+        </button>
+      </div>
+
+      <div style={styles.sectionCard}>
+        <div style={styles.historyHeader}>
+          <h2 style={styles.h2}>Histórico de consultas</h2>
+          <button style={styles.secondaryBtn} onClick={carregarHistorico} disabled={historyLoading}>
+            {historyLoading ? "A carregar..." : "Atualizar histórico"}
+          </button>
+        </div>
+
+        {history.length === 0 ? (
+          <p style={styles.noteText}>Ainda não há histórico para mostrar.</p>
+        ) : (
+          <div style={styles.historyList}>
+            {history.map((item) => {
+              const expanded = expandedSessionId === item.id;
+
+              return (
+                <div key={item.id} style={styles.historyCard}>
+                  <div style={styles.historyTop}>
+                    <div>
+                      <div style={styles.historyTitle}>Sessão {item.id}</div>
+                      <div style={styles.historyMeta}>
+                        <b>Cliente:</b> {item.cliente_nome || "-"}
+                      </div>
+                      <div style={styles.historyMeta}>
+                        <b>Dia:</b> {formatOnlyDate(item.started_at || item.created_at)}
+                      </div>
+                      <div style={styles.historyMeta}>
+                        <b>Hora:</b> {formatOnlyTime(item.started_at || item.created_at)}
+                      </div>
+                      <div style={styles.historyMeta}>
+                        <b>Duração:</b> {formatDuration(item.billed_seconds)}
+                      </div>
+                    </div>
+
+                    <button
+                      style={styles.secondaryBtn}
+                      onClick={() =>
+                        setExpandedSessionId(expanded ? "" : item.id)
+                      }
+                    >
+                      {expanded ? "Fechar" : "Ver chat"}
+                    </button>
+                  </div>
+
+                  {expanded && (
+                    <div style={styles.chatTranscript}>
+                      {item.messages?.length ? (
+                        item.messages.map((m, idx) => (
+                          <div key={idx} style={styles.messageRow}>
+                            <div style={styles.messageRole}>
+                              {m.sender_role === "consultor" ? "Consultor" : "Cliente"} —{" "}
+                              {formatDateTime(m.sent_at)}
+                            </div>
+                            <div style={styles.messageText}>{m.text}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={styles.noteText}>
+                          Não há mensagens guardadas nesta consulta.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div style={styles.noteCard}>
@@ -564,6 +847,117 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     color: "#f4d78b",
   },
+  sectionCard: {
+    padding: 18,
+    borderRadius: 16,
+    background: "rgba(0,0,0,0.25)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    marginBottom: 18,
+  },
+  label: {
+    display: "block",
+    marginBottom: 8,
+    marginTop: 14,
+    fontWeight: 800,
+    opacity: 0.9,
+  },
+  input: {
+    width: "100%",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(0,0,0,0.25)",
+    color: "#fff",
+    padding: "12px 12px",
+    outline: "none",
+  },
+  textarea: {
+    width: "100%",
+    minHeight: 110,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(0,0,0,0.25)",
+    color: "#fff",
+    padding: "12px 12px",
+    outline: "none",
+    resize: "vertical",
+  },
+  primaryBtn: {
+    marginTop: 16,
+    padding: "12px 16px",
+    borderRadius: 12,
+    border: "1px solid rgba(212,175,55,0.95)",
+    background: "rgba(212,175,55,0.95)",
+    color: "#111",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  secondaryBtn: {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(212,175,55,0.45)",
+    background: "rgba(212,175,55,0.12)",
+    color: "#f4d78b",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  historyHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginBottom: 12,
+  },
+  historyList: {
+    display: "grid",
+    gap: 14,
+  },
+  historyCard: {
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.03)",
+    padding: 14,
+  },
+  historyTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  historyTitle: {
+    fontSize: 18,
+    fontWeight: 900,
+    color: "#f4d78b",
+    marginBottom: 8,
+  },
+  historyMeta: {
+    marginBottom: 6,
+    opacity: 0.92,
+  },
+  chatTranscript: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTop: "1px solid rgba(255,255,255,0.08)",
+    display: "grid",
+    gap: 10,
+  },
+  messageRow: {
+    borderRadius: 12,
+    padding: 10,
+    background: "rgba(0,0,0,0.18)",
+    border: "1px solid rgba(255,255,255,0.06)",
+  },
+  messageRole: {
+    fontSize: 12,
+    fontWeight: 900,
+    opacity: 0.85,
+    marginBottom: 6,
+  },
+  messageText: {
+    whiteSpace: "pre-wrap",
+    lineHeight: 1.5,
+  },
   noteCard: {
     padding: 18,
     borderRadius: 16,
@@ -576,6 +970,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   error: {
     color: "#ff8080",
+    fontWeight: 700,
+    marginBottom: 14,
+  },
+  success: {
+    color: "#7dffb1",
     fontWeight: 700,
     marginBottom: 14,
   },
