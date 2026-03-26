@@ -64,45 +64,121 @@ export async function POST(req: Request) {
       );
     }
 
- const consultorAtual = db
-  .prepare(
-    `
-    SELECT id, online, ocupado, ativo
-    FROM consultores
-    WHERE id = ?
-    LIMIT 1
-    `
-  )
-  .get(consultorId) as any;
+    const consultorAtual = db
+      .prepare(
+        `
+        SELECT id, online, ocupado, ativo
+        FROM consultores
+        WHERE id = ?
+        LIMIT 1
+        `
+      )
+      .get(consultorId) as any;
 
-if (!consultorAtual) {
-  return NextResponse.json(
-    { ok: false, error: "Consultor não encontrado." },
-    { status: 404 }
-  );
-}
+    if (!consultorAtual) {
+      return NextResponse.json(
+        { ok: false, error: "Consultor não encontrado." },
+        { status: 404 }
+      );
+    }
 
-if (Number(consultorAtual.ativo ?? 0) !== 1) {
-  return NextResponse.json(
-    { ok: false, error: "Consultor não está ativo." },
-    { status: 400 }
-  );
-}
+    if (Number(consultorAtual.ativo ?? 0) !== 1) {
+      return NextResponse.json(
+        { ok: false, error: "Consultor não está ativo." },
+        { status: 400 }
+      );
+    }
 
-if (Number(consultorAtual.online ?? 0) !== 1) {
-  return NextResponse.json(
-    { ok: false, error: "Consultor está offline." },
-    { status: 400 }
-  );
-}
+    if (Number(consultorAtual.online ?? 0) !== 1) {
+      return NextResponse.json(
+        { ok: false, error: "Consultor está offline." },
+        { status: 400 }
+      );
+    }
 
-if (Number(consultorAtual.ocupado ?? 0) === 1) {
-  return NextResponse.json(
-    { ok: false, error: "Consultor já está ocupado." },
-    { status: 409 }
-  );
-}   
     const now = Math.floor(Date.now() / 1000);
+
+    // Limpa sessões ativas antigas/presas deste consultor
+    db.prepare(
+      `
+      UPDATE chat_sessions
+      SET status = 'ended',
+          ended_at = ?
+      WHERE consultor_id = ?
+        AND status = 'active'
+        AND id <> ?
+        AND (
+          started_at IS NULL
+          OR started_at < ?
+        )
+      `
+    ).run(now, consultorId, sessionId, now - 300);
+
+    // Se o consultor estiver marcado como ocupado mas já não tiver sessão ativa,
+    // corrige automaticamente antes de aceitar/rejeitar
+    const activeSession = db
+      .prepare(
+        `
+        SELECT id
+        FROM chat_sessions
+        WHERE consultor_id = ?
+          AND status = 'active'
+        LIMIT 1
+        `
+      )
+      .get(consultorId) as any;
+
+    if (Number(consultorAtual.ocupado ?? 0) === 1 && !activeSession) {
+      db.prepare(
+        `
+        UPDATE consultores
+        SET ocupado = 0,
+            online = 1,
+            last_seen_at = ?
+        WHERE id = ?
+        `
+      ).run(now, consultorId);
+    }
+
+    // Revalida depois da limpeza automática
+    const consultorRevalidado = db
+      .prepare(
+        `
+        SELECT id, online, ocupado, ativo
+        FROM consultores
+        WHERE id = ?
+        LIMIT 1
+        `
+      )
+      .get(consultorId) as any;
+
+    if (!consultorRevalidado) {
+      return NextResponse.json(
+        { ok: false, error: "Consultor não encontrado após revalidação." },
+        { status: 404 }
+      );
+    }
+
+    if (Number(consultorRevalidado.ativo ?? 0) !== 1) {
+      return NextResponse.json(
+        { ok: false, error: "Consultor não está ativo." },
+        { status: 400 }
+      );
+    }
+
+    if (Number(consultorRevalidado.online ?? 0) !== 1) {
+      return NextResponse.json(
+        { ok: false, error: "Consultor está offline." },
+        { status: 400 }
+      );
+    }
+
+    if (Number(consultorRevalidado.ocupado ?? 0) === 1 && action === "accept") {
+      return NextResponse.json(
+        { ok: false, error: "Consultor já está ocupado." },
+        { status: 409 }
+      );
+    }
 
     if (action === "reject") {
       db.transaction(() => {
@@ -119,6 +195,7 @@ if (Number(consultorAtual.ocupado ?? 0) === 1) {
           `
           UPDATE consultores
           SET ocupado = 0,
+              online = 1,
               last_seen_at = ?
           WHERE id = ?
           `
