@@ -89,6 +89,14 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  sender_role TEXT NOT NULL,
+  text TEXT NOT NULL,
+  sent_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
 CREATE TABLE IF NOT EXISTS wallet_transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   wallet_id INTEGER NOT NULL,
@@ -180,16 +188,16 @@ try { db.exec(`ALTER TABLE users ADD COLUMN telefone TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN preco_chat REAL NOT NULL DEFAULT 1.0;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN preco_voz REAL NOT NULL DEFAULT 1.0;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN percentagem_ganho REAL NOT NULL DEFAULT 40;`); } catch {}
+try { db.exec(`ALTER TABLE consultores ADD COLUMN foto_url TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE consultores ADD COLUMN especialidades TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE consultores ADD COLUMN apresentacao TEXT;`); } catch {}
 
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_1_qtd INTEGER NOT NULL DEFAULT 1;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_1_preco REAL NOT NULL DEFAULT 1;`); } catch {}
-
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_2_qtd INTEGER NOT NULL DEFAULT 3;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_2_preco REAL NOT NULL DEFAULT 3;`); } catch {}
-
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_3_qtd INTEGER NOT NULL DEFAULT 5;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_3_preco REAL NOT NULL DEFAULT 5;`); } catch {}
-
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_4_qtd INTEGER NOT NULL DEFAULT 10;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_4_preco REAL NOT NULL DEFAULT 10;`); } catch {}
 
@@ -197,7 +205,7 @@ try { db.exec(`ALTER TABLE contactos ADD COLUMN telefone TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN assunto TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN status TEXT NOT NULL DEFAULT 'novo';`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN responded_at INTEGER;`); } catch {}
-/* WALLET */
+
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }

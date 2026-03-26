@@ -1,7 +1,35 @@
 const http = require("http");
 const { Server } = require("socket.io");
+const Database = require("better-sqlite3");
+const path = require("path");
+const fs = require("fs");
 
 const PORT = Number(process.env.PORT || 3001);
+
+const basePath =
+  process.env.SQLITE_DIR ||
+  process.env.RAILWAY_VOLUME_MOUNT_PATH ||
+  (process.env.NODE_ENV === "production" ? "/data" : process.cwd());
+
+if (!fs.existsSync(basePath)) {
+  fs.mkdirSync(basePath, { recursive: true });
+}
+
+const dbPath = path.join(basePath, "data.sqlite");
+const db = new Database(dbPath);
+
+db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON");
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  sender_role TEXT NOT NULL,
+  text TEXT NOT NULL,
+  sent_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+`);
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -62,10 +90,27 @@ io.on("connection", (socket) => {
   socket.on("msg", (data) => {
     if (!data?.sessionId || !data?.text) return;
 
-    io.to(roomSession(data.sessionId)).emit("msg", {
-      sessionId: String(data.sessionId),
-      text: String(data.text),
-      senderRole: data.senderRole === "consultor" ? "consultor" : "cliente",
+    const sessionId = String(data.sessionId);
+    const text = String(data.text).trim();
+    const senderRole = data.senderRole === "consultor" ? "consultor" : "cliente";
+
+    if (!text) return;
+
+    try {
+      db.prepare(
+        `
+        INSERT INTO chat_messages (session_id, sender_role, text, sent_at)
+        VALUES (?, ?, ?, strftime('%s','now'))
+        `
+      ).run(sessionId, senderRole, text);
+    } catch (e) {
+      console.error("ERRO ao guardar chat_messages:", e);
+    }
+
+    io.to(roomSession(sessionId)).emit("msg", {
+      sessionId,
+      text,
+      senderRole,
       at: Date.now(),
     });
   });

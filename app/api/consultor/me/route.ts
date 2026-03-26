@@ -23,6 +23,9 @@ export async function GET() {
           nome,
           email,
           preco_por_min AS valor_min_eur,
+          foto_url,
+          especialidades,
+          apresentacao,
           ativo,
           online,
           ocupado
@@ -40,9 +43,6 @@ export async function GET() {
       );
     }
 
-    // AUTO-CORREÇÃO:
-    // se estiver marcado como ocupado mas já não houver sessão ativa,
-    // limpa automaticamente o ocupado
     const activeSession = db
       .prepare(
         `
@@ -78,6 +78,9 @@ export async function GET() {
         nome: String(consultor.nome ?? ""),
         email: String(consultor.email ?? ""),
         valor_min_eur: Number(consultor.valor_min_eur ?? 0),
+        foto_url: String(consultor.foto_url ?? ""),
+        especialidades: String(consultor.especialidades ?? ""),
+        apresentacao: String(consultor.apresentacao ?? ""),
         ativo: Number(consultor.ativo ?? 0),
         online: Number(consultor.online ?? 0),
         ocupado: ocupadoFinal,
