@@ -135,14 +135,15 @@ export default function ConsultorPage() {
 
     return () => clearInterval(t);
   }, [online, ocupado, responding]);
- async function terminarSessao() {
+
+  async function terminarSessao() {
     try {
       await fetch("/api/consultor/status", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ online: 0 }),
+        body: JSON.stringify({ online: 0, ocupado: 0 }),
       });
 
       await fetch("/api/logout-consultor", { method: "POST" });
@@ -151,7 +152,7 @@ export default function ConsultorPage() {
     }
   }
 
-  async function alterarEstado(novoOnline: number) {
+  async function alterarEstado(params: { online?: number; ocupado?: number }) {
     try {
       setStatusLoading(true);
       setErro("");
@@ -161,7 +162,7 @@ export default function ConsultorPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ online: novoOnline }),
+        body: JSON.stringify(params),
       });
 
       const json = await res.json().catch(() => ({}));
@@ -170,10 +171,10 @@ export default function ConsultorPage() {
         throw new Error(json?.error || "Erro ao atualizar estado.");
       }
 
-      setOnline(Number(json?.consultor?.online ?? novoOnline) === 1);
+      setOnline(Number(json?.consultor?.online ?? 0) === 1);
       setOcupado(Number(json?.consultor?.ocupado ?? 0) === 1);
 
-      if (novoOnline === 0) {
+      if (Number(json?.consultor?.ocupado ?? 0) === 1 || Number(json?.consultor?.online ?? 0) === 0) {
         setPendingChat(null);
       }
     } catch (e: any) {
@@ -246,6 +247,7 @@ export default function ConsultorPage() {
 
       if (action === "reject") {
         alert("Pedido rejeitado.");
+        await carregarDados();
         return;
       }
 
@@ -325,21 +327,25 @@ export default function ConsultorPage() {
         </div>
 
         <div style={styles.headerButtons}>
-          <button style={styles.refreshBtn} onClick={carregarDados}>
-            Atualizar
-          </button>
-
           <button
             style={styles.onlineBtn}
-            onClick={() => alterarEstado(1)}
+            onClick={() => alterarEstado({ online: 1, ocupado: 0 })}
             disabled={statusLoading}
           >
             Ficar disponível
           </button>
 
           <button
+            style={styles.busyBtn}
+            onClick={() => alterarEstado({ ocupado: 1 })}
+            disabled={statusLoading}
+          >
+            Ficar ocupada
+          </button>
+
+          <button
             style={styles.offlineBtn}
-            onClick={() => alterarEstado(0)}
+            onClick={() => alterarEstado({ online: 0, ocupado: 0 })}
             disabled={statusLoading}
           >
             Ficar indisponível
@@ -354,7 +360,8 @@ export default function ConsultorPage() {
           </button>
         </div>
       </div>
- <div style={styles.grid}>
+
+      <div style={styles.grid}>
         <div style={styles.card}>
           <div style={styles.cardLabel}>Ganhos hoje</div>
           <div style={styles.cardValue}>{ganhosHoje.toFixed(2)}€</div>
@@ -490,21 +497,21 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
-  refreshBtn: {
-    padding: "10px 14px",
-    borderRadius: 10,
-    border: "1px solid rgba(212,175,55,0.6)",
-    background: "rgba(212,175,55,0.12)",
-    color: "#f4d78b",
-    fontWeight: 800,
-    cursor: "pointer",
-  },
   onlineBtn: {
     padding: "10px 14px",
     borderRadius: 10,
     border: "1px solid rgba(125,255,177,0.5)",
     background: "rgba(20,120,60,0.35)",
     color: "#d8ffe6",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  busyBtn: {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,211,107,0.45)",
+    background: "rgba(160,120,20,0.35)",
+    color: "#fff1bf",
     fontWeight: 800,
     cursor: "pointer",
   },
