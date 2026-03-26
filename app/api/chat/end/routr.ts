@@ -63,7 +63,7 @@ export async function POST(req: Request) {
         `
         UPDATE chat_sessions
         SET status = 'ended',
-            ended_at = ?
+            ended_at = COALESCE(ended_at, ?)
         WHERE id = ?
         `
       ).run(now, sessionId);

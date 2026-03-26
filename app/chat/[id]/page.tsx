@@ -171,28 +171,6 @@ export default function ChatPage() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, [sessionId, role, router]);
- useEffect(() => {
-    if (!sessionId) {
-      setErr("Sessão em falta. Inicia o chat a partir da página principal.");
-    }
-  }, [sessionId]);
-
-  useEffect(() => {
-    function onStorage(ev: StorageEvent) {
-      if (ev.key !== "sacraluna_session_end" || !ev.newValue) return;
-
-      try {
-        const data = JSON.parse(ev.newValue);
-        if (data?.sessionId !== sessionId) return;
-
-        alert("A consulta terminou.");
-        goBackToArea();
-      } catch {}
-    }
-
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [sessionId, role, router]);
 
   useEffect(() => {
     async function validarSessao() {
@@ -269,7 +247,7 @@ export default function ChatPage() {
           id: Number(c?.id ?? consultorId),
           nome: String(c?.nome ?? `Consultor ${consultorId}`),
           valor_min_eur: Number(
-            c?.valor_min_eur ?? c?.preco_por_min ?? c?.valor_min ?? 0
+            c?.preco_chat ?? c?.valor_min_eur ?? c?.preco_por_min ?? c?.valor_min ?? 0
           ),
           ativo: Number(c?.ativo ?? 0),
         });
@@ -300,7 +278,8 @@ export default function ChatPage() {
       carregarInfo();
     }
   }, [consultorId, router, sessionId, role, sessionValidated]);
-   useEffect(() => {
+
+  useEffect(() => {
     if (!sessionId || !sessionValidated) return;
 
     setErr(null);
@@ -495,7 +474,8 @@ export default function ChatPage() {
       window.removeEventListener("beforeunload", endByBeacon);
     };
   }, [sessionId]);
- async function terminarConsulta() {
+
+  async function terminarConsulta() {
     if (!sessionId || endingRef.current) return;
 
     endingRef.current = true;
@@ -796,4 +776,4 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     padding: "12px 16px",
   },
-}; 
+};
