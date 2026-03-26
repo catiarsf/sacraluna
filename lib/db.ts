@@ -180,6 +180,20 @@ CREATE TABLE IF NOT EXISTS contactos (
   created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   responded_at INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS call_sessions (
+  id TEXT PRIMARY KEY,
+  consultor_id INTEGER,
+  cliente_id INTEGER,
+  cliente_nome TEXT,
+  status TEXT,
+  call_sid TEXT,
+  duration_seconds INTEGER DEFAULT 0,
+  recording_url TEXT,
+  created_at INTEGER DEFAULT (strftime('%s','now')),
+  started_at INTEGER,
+  ended_at INTEGER
+);
 `);
 
 /* MIGRAÇÕES SEGURAS */
