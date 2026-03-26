@@ -374,6 +374,11 @@ async function onCreate(e: React.FormEvent) {
           <div style={styles.quickTitle}>Blog</div>
           <div style={styles.quickText}>Criar cartas do dia e artigos com imagem e texto</div>
         </Link>
+      
+      <Link href="/admin/historico" style={styles.quickCard}>
+  <div style={styles.quickTitle}>Histórico</div>
+  <div style={styles.quickText}>Ver chats e emails/perguntas de todos os consultores</div>
+</Link>
       </div>
 
       {err && <div style={styles.err}>{err}</div>}
