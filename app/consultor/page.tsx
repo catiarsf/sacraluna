@@ -479,7 +479,6 @@ export default function ConsultorPage() {
         <div>
           <div style={styles.subtle}>Consultor</div>
           <div style={styles.name}>{consultorNome}</div>
-          <div style={styles.idLine}>ID: {consultorId ?? "-"}</div>
           <div style={{ ...styles.statusLine, color: statusCor }}>{statusTexto}</div>
         </div>
 
@@ -765,10 +764,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     color: "#f4d78b",
   },
-  idLine: {
-    marginTop: 6,
-    opacity: 0.8,
-  },
+  
   statusLine: {
     marginTop: 10,
     fontWeight: 900,
