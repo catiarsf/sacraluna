@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     const consultor = db
       .prepare(
         `
-        SELECT id, nome, preco_por_min, ativo, online, ocupado
+        SELECT id, nome, preco_por_min, preco_chat, ativo, online, ocupado
         FROM consultores
         WHERE id = ?
         `
@@ -138,13 +138,17 @@ export async function POST(req: Request) {
       )
       .get(user.id, consultorId) as any;
 
+    const precoPorMin = toNumber(
+      consultor.preco_chat ?? consultor.preco_por_min
+    );
+
     if (alreadyPendingSamePair) {
       return NextResponse.json({
         ok: true,
         status: "pending",
         session_id: alreadyPendingSamePair.id,
         consultor_id: consultorId,
-        preco_por_min: toNumber(consultor.preco_por_min),
+        preco_por_min: precoPorMin,
       });
     }
 
@@ -169,7 +173,6 @@ export async function POST(req: Request) {
 
     const wallet = getOrCreateWallet("cliente", Number(user.id));
     const saldo = toNumber(wallet?.balance_eur);
-    const precoPorMin = toNumber(consultor.preco_por_min);
 
     if (precoPorMin <= 0) {
       return NextResponse.json(

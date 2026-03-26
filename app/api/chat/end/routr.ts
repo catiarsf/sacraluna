@@ -56,15 +56,6 @@ export async function POST(req: Request) {
       );
     }
 
-    if (row.status === "ended") {
-      return NextResponse.json({
-        ok: true,
-        already_ended: true,
-        session_id: sessionId,
-        status: "ended",
-      });
-    }
-
     const now = Math.floor(Date.now() / 1000);
 
     db.transaction(() => {
