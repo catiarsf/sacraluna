@@ -71,6 +71,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Livro de Reclamações
             </a>
 
+            {/* 🔐 BOTÃO ADMIN (DISCRETO MAS VISÍVEL) */}
+            <a
+              href="/admin-login"
+              style={{
+                color: "rgba(244,215,139,0.45)", // 👈 mais visível
+                textDecoration: "none",
+                fontWeight: 900,
+                fontSize: "14px", // 👈 maior
+                lineHeight: 1,
+                display: "inline-block",
+                padding: "0 4px",
+              }}
+              title="Acesso reservado"
+            >
+              •
+            </a>
+
             <a
               href="https://www.consumidor.gov.pt"
               target="_blank"
