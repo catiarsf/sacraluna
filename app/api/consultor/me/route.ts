@@ -40,6 +40,37 @@ export async function GET() {
       );
     }
 
+    // AUTO-CORREÇÃO:
+    // se estiver marcado como ocupado mas já não houver sessão ativa,
+    // limpa automaticamente o ocupado
+    const activeSession = db
+      .prepare(
+        `
+        SELECT id
+        FROM chat_sessions
+        WHERE consultor_id = ?
+          AND status = 'active'
+        LIMIT 1
+        `
+      )
+      .get(consultorId) as any;
+
+    let ocupadoFinal = Number(consultor.ocupado ?? 0);
+
+    if (ocupadoFinal === 1 && !activeSession) {
+      db.prepare(
+        `
+        UPDATE consultores
+        SET ocupado = 0,
+            online = 1,
+            last_seen_at = strftime('%s','now')
+        WHERE id = ?
+        `
+      ).run(consultorId);
+
+      ocupadoFinal = 0;
+    }
+
     return NextResponse.json({
       ok: true,
       consultor: {
@@ -49,7 +80,7 @@ export async function GET() {
         valor_min_eur: Number(consultor.valor_min_eur ?? 0),
         ativo: Number(consultor.ativo ?? 0),
         online: Number(consultor.online ?? 0),
-        ocupado: Number(consultor.ocupado ?? 0),
+        ocupado: ocupadoFinal,
       },
     });
   } catch (e: any) {
