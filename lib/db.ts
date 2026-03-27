@@ -186,11 +186,12 @@ CREATE TABLE IF NOT EXISTS call_sessions (
   consultor_id INTEGER,
   cliente_id INTEGER,
   cliente_nome TEXT,
-  status TEXT,
+  status TEXT NOT NULL DEFAULT 'initiated',
   call_sid TEXT,
-  duration_seconds INTEGER DEFAULT 0,
+  price_per_min REAL NOT NULL DEFAULT 0,
+  duration_seconds INTEGER NOT NULL DEFAULT 0,
   recording_url TEXT,
-  created_at INTEGER DEFAULT (strftime('%s','now')),
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   started_at INTEGER,
   ended_at INTEGER
 );
@@ -219,6 +220,14 @@ try { db.exec(`ALTER TABLE contactos ADD COLUMN telefone TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN assunto TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN status TEXT NOT NULL DEFAULT 'novo';`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN responded_at INTEGER;`); } catch {}
+
+/* MIGRAÇÕES CALL_SESSIONS */
+try { db.exec(`ALTER TABLE call_sessions ADD COLUMN call_sid TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE call_sessions ADD COLUMN price_per_min REAL NOT NULL DEFAULT 0;`); } catch {}
+try { db.exec(`ALTER TABLE call_sessions ADD COLUMN duration_seconds INTEGER NOT NULL DEFAULT 0;`); } catch {}
+try { db.exec(`ALTER TABLE call_sessions ADD COLUMN recording_url TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE call_sessions ADD COLUMN started_at INTEGER;`); } catch {}
+try { db.exec(`ALTER TABLE call_sessions ADD COLUMN ended_at INTEGER;`); } catch {}
 
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
