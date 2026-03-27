@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 type Ctx = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 function norm(v: any) {
@@ -16,9 +16,10 @@ function toNumber(v: any) {
   return Number.isFinite(n) ? n : 0;
 }
 
-export async function PUT(req: Request, { params }: Ctx) {
+export async function PUT(req: Request, ctx: Ctx) {
   try {
-    const servicoId = Number(params.id);
+    const { id } = await ctx.params;
+    const servicoId = Number(id);
 
     if (!Number.isFinite(servicoId) || servicoId <= 0) {
       return NextResponse.json(
@@ -181,9 +182,10 @@ export async function PUT(req: Request, { params }: Ctx) {
   }
 }
 
-export async function DELETE(_req: Request, { params }: Ctx) {
+export async function DELETE(_req: Request, ctx: Ctx) {
   try {
-    const servicoId = Number(params.id);
+    const { id } = await ctx.params;
+    const servicoId = Number(id);
 
     if (!Number.isFinite(servicoId) || servicoId <= 0) {
       return NextResponse.json(
