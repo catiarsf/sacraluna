@@ -173,7 +173,9 @@ export default function ClientePage() {
 
         if (json?.pending) {
           await atualizarSaldo();
-          alert("Pagamento recebido, mas ainda está a ser confirmado. Atualiza novamente dentro de instantes.");
+          alert(
+            "Pagamento recebido, mas ainda está a ser confirmado. Atualiza novamente dentro de instantes."
+          );
           limparParametrosStripeDaUrl();
           return;
         }
@@ -225,6 +227,15 @@ export default function ClientePage() {
   return (
     <main style={styles.page}>
       <h1 style={styles.h1}>Área do Cliente</h1>
+
+      <div style={styles.quickActions}>
+        <button
+          style={styles.quickButton}
+          onClick={() => router.push("/cliente/emails")}
+        >
+          📩 Consultas por Email
+        </button>
+      </div>
 
       <div style={styles.card}>
         <h2 style={styles.h2}>Saldo / Créditos</h2>
@@ -308,6 +319,21 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
     fontSize: 18,
     fontWeight: 800,
+  },
+  quickActions: {
+    display: "flex",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 24,
+  },
+  quickButton: {
+    padding: "12px 18px",
+    borderRadius: 12,
+    cursor: "pointer",
+    border: "1px solid rgba(212,175,55,0.55)",
+    background: "rgba(212,175,55,0.16)",
+    color: "#f4d78b",
+    fontWeight: 900,
   },
   card: {
     marginTop: 24,
