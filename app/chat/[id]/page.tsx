@@ -247,7 +247,7 @@ export default function ChatPage() {
           id: Number(c?.id ?? consultorId),
           nome: String(c?.nome ?? `Consultor ${consultorId}`),
           valor_min_eur: Number(
-            c?.preco_chat ?? c?.valor_min_eur ?? c?.preco_por_min ?? c?.valor_min ?? 0
+            c?.valor_min_eur ?? c?.preco_por_min ?? c?.valor_min ?? 0
           ),
           ativo: Number(c?.ativo ?? 0),
         });
@@ -338,6 +338,10 @@ export default function ChatPage() {
       };
 
       setMsgs((prev) => [...prev, msg]);
+
+      if (m.senderRole !== role) {
+        tocarAlertaSeAtivado();
+      }
     });
 
     socket.on("call_status", async (payload: any) => {
@@ -604,12 +608,14 @@ export default function ChatPage() {
             </div>
           )}
 
-          <div style={styles.infoRow}>
-            <span style={styles.infoLabel}>Sessão</span>
-            <span style={styles.infoValueSmall} title={sessionId || ""}>
-              {shortSessionId(sessionId)}
-            </span>
-          </div>
+          {role === "cliente" && (
+            <div style={styles.infoRow}>
+              <span style={styles.infoLabel}>Sessão</span>
+              <span style={styles.infoValueSmall} title={sessionId || ""}>
+                {shortSessionId(sessionId)}
+              </span>
+            </div>
+          )}
 
           <div style={styles.infoRow}>
             <span style={styles.infoLabel}>Estado</span>
