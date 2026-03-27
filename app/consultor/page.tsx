@@ -510,6 +510,34 @@ export default function ConsultorPage() {
           <button style={styles.alertBtn} onClick={ativarAlertas}>
             {alertasAtivos ? "🔔 Alertas ativos" : "🔔 Ativar alertas"}
           </button>
+          
+        <button
+  style={styles.alertBtn}
+  onClick={() => router.push("/consultor/perfil")}
+>
+  Editar perfil
+</button>
+
+<button
+  style={styles.alertBtn}
+  onClick={() => router.push("/consultor/historico-chat")}
+>
+  Histórico chat
+</button>
+
+<button
+  style={styles.alertBtn}
+  onClick={() => router.push("/consultor/historico-email")}
+>
+  Histórico email
+</button>
+
+<button
+  style={styles.alertBtn}
+  onClick={() => router.push("/consultor/chamadas")}
+>
+  Histórico voz
+</button>
 
           <button style={styles.logoutBtn} onClick={terminarSessao}>
             Terminar sessão
