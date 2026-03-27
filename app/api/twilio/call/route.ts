@@ -183,7 +183,6 @@ export async function POST(req: Request) {
       `&clienteId=${session.user.id}` +
       `&callSessionId=${encodeURIComponent(callSessionId)}`;
 
-    // Marca a consultora como ocupada logo ao arrancar a chamada
     db.prepare(`
       UPDATE consultores
       SET ocupado = 1,
@@ -191,7 +190,6 @@ export async function POST(req: Request) {
       WHERE id = ?
     `).run(consultorId);
 
-    // Liga primeiro à consultora
     const call = await client.calls.create({
       to: consultor.telefone,
       from: twilioPhoneNumber,
@@ -210,13 +208,14 @@ export async function POST(req: Request) {
         cliente_nome,
         status,
         call_sid,
+        price_per_min,
         duration_seconds,
         recording_url,
         created_at,
         started_at,
         ended_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, NULL)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, NULL, NULL)
     `).run(
       callSessionId,
       consultorId,
@@ -224,6 +223,7 @@ export async function POST(req: Request) {
       String(cliente.nome ?? "Cliente"),
       "initiated",
       String(call.sid),
+      precoVoz,
       now
     );
 
