@@ -1,8 +1,17 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
 export async function GET() {
   try {
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { ok: false, error: "Rota desativada em produção." },
+        { status: 403 }
+      );
+    }
+
     const userId = 3;
 
     const existe = db
@@ -61,6 +70,7 @@ export async function GET() {
     });
   } catch (e: any) {
     console.error("ERRO fix-wallet:", e);
+
     return NextResponse.json(
       { ok: false, error: e?.message || "Erro interno do servidor." },
       { status: 500 }
