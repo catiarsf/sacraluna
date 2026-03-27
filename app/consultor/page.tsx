@@ -46,9 +46,11 @@ export default function ConsultorPage() {
 
   const [pendingChat, setPendingChat] = useState<PendingChat>(null);
   const [responding, setResponding] = useState(false);
+  const [pendingEmails, setPendingEmails] = useState(0);
 
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastAlertedSessionRef = useRef<string>("");
+  const lastPendingEmailsRef = useRef(0);
 
   async function carregarDados() {
     try {
@@ -114,6 +116,32 @@ export default function ConsultorPage() {
     } catch {}
   }
 
+  async function verificarEmailsPendentes() {
+    try {
+      const res = await fetch("/api/consultor/emails", {
+        cache: "no-store",
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) return;
+
+      const pedidos = Array.isArray(json?.pedidos) ? json.pedidos : [];
+      const pendentes = pedidos.filter((p: any) => String(p?.status ?? "") !== "respondido");
+      const totalPendentes = pendentes.length;
+
+      if (
+        totalPendentes > lastPendingEmailsRef.current &&
+        localStorage.getItem("sacraluna_alertas_ativos") === "1"
+      ) {
+        tocarAlerta();
+      }
+
+      lastPendingEmailsRef.current = totalPendentes;
+      setPendingEmails(totalPendentes);
+    } catch {}
+  }
+
   useEffect(() => {
     carregarDados();
   }, []);
@@ -136,6 +164,16 @@ export default function ConsultorPage() {
 
     return () => clearInterval(t);
   }, [online, ocupado, responding]);
+
+  useEffect(() => {
+    verificarEmailsPendentes();
+
+    const t = setInterval(() => {
+      verificarEmailsPendentes();
+    }, 5000);
+
+    return () => clearInterval(t);
+  }, []);
 
   async function terminarSessao() {
     try {
@@ -375,7 +413,7 @@ export default function ConsultorPage() {
             style={styles.alertBtn}
             onClick={() => router.push("/consultor/historico-email")}
           >
-            Histórico email
+            Histórico email {pendingEmails > 0 ? `(${pendingEmails})` : ""}
           </button>
 
           <button
