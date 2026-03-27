@@ -51,6 +51,7 @@ export default function ConsultorPage() {
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastAlertedSessionRef = useRef<string>("");
   const lastPendingEmailsRef = useRef(0);
+  const emailsInitializedRef = useRef(false);
 
   async function carregarDados() {
     try {
@@ -127,9 +128,20 @@ export default function ConsultorPage() {
       if (!res.ok || !json?.ok) return;
 
       const pedidos = Array.isArray(json?.pedidos) ? json.pedidos : [];
-      const pendentes = pedidos.filter((p: any) => String(p?.status ?? "") !== "respondido");
+      const pendentes = pedidos.filter(
+        (p: any) => String(p?.status ?? "") !== "respondido"
+      );
       const totalPendentes = pendentes.length;
 
+      // Primeira leitura: inicializa sem tocar alerta
+      if (!emailsInitializedRef.current) {
+        emailsInitializedRef.current = true;
+        lastPendingEmailsRef.current = totalPendentes;
+        setPendingEmails(totalPendentes);
+        return;
+      }
+
+      // Só toca se entrou email novo depois da inicialização
       if (
         totalPendentes > lastPendingEmailsRef.current &&
         localStorage.getItem("sacraluna_alertas_ativos") === "1"
@@ -243,7 +255,8 @@ export default function ConsultorPage() {
       const audio = new Audio("/alert.mp3");
       audio.volume = 1;
 
-      audio.play()
+      audio
+        .play()
         .then(() => {
           audio.pause();
           audio.currentTime = 0;
