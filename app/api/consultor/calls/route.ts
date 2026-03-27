@@ -28,7 +28,7 @@ export async function GET() {
         created_at,
         started_at,
         ended_at
-      FROM voice_calls
+      FROM call_sessions
       WHERE consultor_id = ?
       ORDER BY created_at DESC
     `).all(consultorId);
@@ -37,7 +37,6 @@ export async function GET() {
       ok: true,
       calls,
     });
-
   } catch (e: any) {
     console.error("ERRO /api/consultor/calls:", e);
 
