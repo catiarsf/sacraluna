@@ -72,7 +72,7 @@ export async function POST(req: Request) {
         pedido_id,
         consultor_id: String(consultor_id),
       },
-      success_url: `${siteUrl}/perguntas/pedido/${pedido_id}`,
+      success_url: `${siteUrl}/perguntas/${pedido_id}`,
       cancel_url: `${siteUrl}/email/${consultor_id}`,
     });
 

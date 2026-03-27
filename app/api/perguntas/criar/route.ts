@@ -1,5 +1,8 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 type ConsultorPacks = {
   pack_1_qtd: number;
@@ -14,10 +17,27 @@ type ConsultorPacks = {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const session = await getSession();
+    const user = session?.user;
 
-    const consultor_id = Number(body.consultor_id);
-    const pacote = Number(body.pacote);
+    if (!user || !user.id) {
+      return NextResponse.json(
+        { ok: false, error: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    if (user.role !== "cliente") {
+      return NextResponse.json(
+        { ok: false, error: "Só clientes podem criar pedidos." },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+
+    const consultor_id = Number(body?.consultor_id);
+    const pacote = Number(body?.pacote);
 
     if (!consultor_id || consultor_id <= 0) {
       return NextResponse.json(
@@ -82,19 +102,22 @@ export async function POST(req: Request) {
     db.prepare(
       `
       INSERT INTO pergunta_pedidos
-      (id, consultor_id, pacote, preco_eur)
-      VALUES (?, ?, ?, ?)
+      (id, cliente_id, consultor_id, pacote, preco_eur, status, created_at)
+      VALUES (?, ?, ?, ?, ?, 'aguarda_pagamento', strftime('%s','now'))
       `
-    ).run(pedido_id, consultor_id, pacote, preco);
+    ).run(pedido_id, Number(user.id), consultor_id, pacote, preco);
 
     return NextResponse.json({
       ok: true,
       pedido_id,
       preco,
+      consultor_id,
     });
   } catch (e: any) {
+    console.error("ERRO /api/perguntas/criar:", e);
+
     return NextResponse.json(
-      { ok: false, error: e?.message || "Erro no servidor" },
+      { ok: false, error: e?.message || "Erro no servidor." },
       { status: 500 }
     );
   }
