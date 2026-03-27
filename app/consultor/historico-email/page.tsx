@@ -91,18 +91,35 @@ export default function ConsultorHistoricoEmailPage() {
                     <div style={styles.meta}>
                       <b>Cliente:</b> {item.cliente_nome || "-"} ({item.cliente_email || "-"})
                     </div>
-                    <div style={styles.meta}><b>Pacote:</b> {item.pacote}</div>
-                    <div style={styles.meta}><b>Preço:</b> {Number(item.preco_eur ?? 0).toFixed(2)}€</div>
-                    <div style={styles.meta}><b>Status:</b> {item.status}</div>
-                    <div style={styles.meta}><b>Criado:</b> {formatDateTime(item.created_at)}</div>
+                    <div style={styles.meta}>
+                      <b>Pacote:</b> {item.pacote}
+                    </div>
+                    <div style={styles.meta}>
+                      <b>Preço:</b> {Number(item.preco_eur ?? 0).toFixed(2)}€
+                    </div>
+                    <div style={styles.meta}>
+                      <b>Status:</b> {item.status}
+                    </div>
+                    <div style={styles.meta}>
+                      <b>Criado:</b> {formatDateTime(item.created_at)}
+                    </div>
                   </div>
 
-                  <button
-                    style={styles.btnSmall}
-                    onClick={() => setExpandedId(expanded ? "" : item.id)}
-                  >
-                    {expanded ? "Fechar" : "Ver conteúdo"}
-                  </button>
+                  <div style={styles.actions}>
+                    <button
+                      style={styles.btnSmall}
+                      onClick={() => setExpandedId(expanded ? "" : item.id)}
+                    >
+                      {expanded ? "Fechar" : "Ver conteúdo"}
+                    </button>
+
+                    <Link
+                      href={`/consultor/responder-email/${item.id}`}
+                      style={styles.linkSmallBtn}
+                    >
+                      Responder
+                    </Link>
+                  </div>
                 </div>
 
                 {expanded && (
@@ -113,7 +130,9 @@ export default function ConsultorHistoricoEmailPage() {
                           <div style={styles.messageRole}>
                             Pergunta enviada em {formatDateTime(it.created_at)}
                           </div>
-                          <div><b>Pergunta:</b> {it.pergunta || "-"}</div>
+                          <div>
+                            <b>Pergunta:</b> {it.pergunta || "-"}
+                          </div>
                           <div style={{ marginTop: 8 }}>
                             <b>Resposta:</b> {it.resposta || "Ainda sem resposta"}
                           </div>
@@ -186,6 +205,23 @@ const styles: Record<string, React.CSSProperties> = {
     color: "white",
     fontWeight: 800,
     cursor: "pointer",
+  },
+  linkSmallBtn: {
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(212,175,55,0.45)",
+    background: "rgba(212,175,55,0.12)",
+    color: "#f4d78b",
+    fontWeight: 800,
+    textDecoration: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actions: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
   },
   err: {
     marginBottom: 12,
