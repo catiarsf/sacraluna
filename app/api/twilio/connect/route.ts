@@ -8,6 +8,7 @@ export async function POST(req: Request) {
     const { searchParams } = new URL(req.url);
     const consultorId = Number(searchParams.get("consultorId") || 0);
     const clienteId = Number(searchParams.get("clienteId") || 0);
+    const callSessionId = String(searchParams.get("callSessionId") || "").trim();
 
     if (!consultorId || !clienteId) {
       const badTwiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -43,11 +44,30 @@ export async function POST(req: Request) {
 
     const clienteNome = String(cliente.nome || "Cliente");
 
+    const statusCallback =
+      `${process.env.NEXT_PUBLIC_SITE_URL}/api/twilio/status` +
+      `?consultorId=${consultorId}` +
+      `&callSessionId=${encodeURIComponent(callSessionId)}`;
+
+    const recordingCallback =
+      `${process.env.NEXT_PUBLIC_SITE_URL}/api/twilio/status` +
+      `?consultorId=${consultorId}` +
+      `&callSessionId=${encodeURIComponent(callSessionId)}`;
+
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say language="pt-PT">Nova consulta da plataforma Sacraluna.</Say>
   <Say language="pt-PT">A ligar ao cliente ${clienteNome}.</Say>
-  <Dial answerOnBridge="true">${cliente.telefone}</Dial>
+  <Dial
+    answerOnBridge="true"
+    record="record-from-answer"
+    recordingStatusCallback="${recordingCallback}"
+    recordingStatusCallbackMethod="POST"
+    action="${statusCallback}"
+    method="POST"
+  >
+    ${cliente.telefone}
+  </Dial>
 </Response>`;
 
     return new NextResponse(twiml, {
