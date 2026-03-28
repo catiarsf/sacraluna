@@ -123,7 +123,8 @@ export default function AdminClient() {
 
     return data.url as string;
   }
-async function onCreate(e: React.FormEvent) {
+
+  async function onCreate(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
 
@@ -274,7 +275,8 @@ async function onCreate(e: React.FormEvent) {
       setTogglingId(null);
     }
   }
- async function setDisponibilidade(c: Consultor, disponivel: boolean) {
+
+  async function setDisponibilidade(c: Consultor, disponivel: boolean) {
     setErr("");
     setTogglingId(c.id);
 
@@ -374,11 +376,21 @@ async function onCreate(e: React.FormEvent) {
           <div style={styles.quickTitle}>Blog</div>
           <div style={styles.quickText}>Criar cartas do dia e artigos com imagem e texto</div>
         </Link>
-      
-      <Link href="/admin/historico" style={styles.quickCard}>
-  <div style={styles.quickTitle}>Histórico</div>
-  <div style={styles.quickText}>Ver chats e emails/perguntas de todos os consultores</div>
-</Link>
+
+        <Link href="/admin/historico" style={styles.quickCard}>
+          <div style={styles.quickTitle}>Histórico</div>
+          <div style={styles.quickText}>Ver chats e emails/perguntas de todos os consultores</div>
+        </Link>
+
+        <Link href="/admin/mensagens" style={styles.quickCard}>
+          <div style={styles.quickTitle}>Mensagens</div>
+          <div style={styles.quickText}>Ver mensagens recebidas do formulário Fale connosco</div>
+        </Link>
+
+        <Link href="/admin/candidaturas" style={styles.quickCard}>
+          <div style={styles.quickTitle}>Candidaturas</div>
+          <div style={styles.quickText}>Ver candidaturas recebidas do Trabalhe connosco</div>
+        </Link>
       </div>
 
       {err && <div style={styles.err}>{err}</div>}
@@ -418,7 +430,8 @@ async function onCreate(e: React.FormEvent) {
               value={precoChat}
               onChange={(e) => setPrecoChat(e.target.value)}
             />
-<label style={styles.label}>Preço voz (€ / min)</label>
+
+            <label style={styles.label}>Preço voz (€ / min)</label>
             <input
               style={styles.input}
               value={precoVoz}
@@ -537,7 +550,8 @@ async function onCreate(e: React.FormEvent) {
             </button>
           </form>
         </div>
-<div style={styles.card}>
+
+        <div style={styles.card}>
           <h2 style={styles.h2}>Lista</h2>
 
           {loading ? (
@@ -639,7 +653,8 @@ async function onCreate(e: React.FormEvent) {
           )}
         </div>
       </div>
- {edit && (
+
+      {edit && (
         <div style={styles.modalBackdrop} onClick={() => !saving && setEdit(null)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h2 style={styles.h2}>Editar consultor</h2>
@@ -902,7 +917,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   quickRow: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: 12,
     marginTop: 16,
   },
@@ -1213,4 +1228,4 @@ const styles: Record<string, React.CSSProperties> = {
     gridTemplateColumns: "1fr 1fr",
     gap: 10,
   },
-};     
+};
