@@ -18,6 +18,17 @@ db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
 db.exec(`
+CREATE TABLE IF NOT EXISTS candidaturas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nome TEXT NOT NULL,
+  email TEXT NOT NULL,
+  telefone TEXT,
+  especialidade TEXT,
+  mensagem TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'novo',
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nome TEXT,
