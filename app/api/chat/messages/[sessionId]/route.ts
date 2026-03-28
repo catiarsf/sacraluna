@@ -1,16 +1,17 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
 type Ctx = {
-  params: Promise<{ sessionId: string }>;
+  params: { sessionId: string };
 };
 
 export async function GET(_req: Request, context: Ctx) {
   try {
-    const { sessionId } = await context.params;
-    const id = String(sessionId || "").trim();
+    const sessionId = String(context.params?.sessionId || "").trim();
 
-    if (!id) {
+    if (!sessionId) {
       return NextResponse.json(
         { ok: false, error: "sessionId inválido" },
         { status: 400 }
@@ -20,17 +21,22 @@ export async function GET(_req: Request, context: Ctx) {
     const rows = db
       .prepare(
         `
-        SELECT sender_role, text, at
+        SELECT sender_role, text, sent_at
         FROM chat_messages
         WHERE session_id = ?
-        ORDER BY at ASC
+        ORDER BY sent_at ASC
         LIMIT 200
         `
       )
-      .all(id);
+      .all(sessionId);
 
-    return NextResponse.json({ ok: true, messages: rows });
+    return NextResponse.json({
+      ok: true,
+      messages: rows,
+    });
   } catch (err: any) {
+    console.error("ERRO /api/chat/messages/[sessionId]:", err);
+
     return NextResponse.json(
       {
         ok: false,
