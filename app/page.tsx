@@ -65,27 +65,30 @@ function getPrecoVoz(c: any): number {
 }
 
 function getStatusRank(c: Consultor) {
-  if (
-    Number(c.ativo ?? 0) === 1 &&
-    Number(c.online ?? 0) === 1 &&
-    Number(c.ocupado ?? 0) === 0
-  ) {
-    return 0;
-  }
+  const ativo = Number(c.ativo ?? 0) === 1;
+  const online = Number(c.online ?? 0) === 1;
+  const ocupado = Number(c.ocupado ?? 0) === 1;
 
-  if (
-    Number(c.ativo ?? 0) === 1 &&
-    Number(c.online ?? 0) === 1 &&
-    Number(c.ocupado ?? 0) === 1
-  ) {
-    return 1;
-  }
+  if (ativo && online && !ocupado) return 0; // disponível
+  if (ativo && online && ocupado) return 1; // ocupado
+  return 2; // indisponível/offline/inativo
+}
 
-  if (Number(c.ativo ?? 0) === 1 && Number(c.online ?? 0) === 0) {
-    return 2;
-  }
+function normalizeName(nome?: string | null) {
+  return String(nome ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-PT");
+}
 
-  return 3;
+function isRaquel(c: Consultor) {
+  const nome = normalizeName(c.nome);
+  return nome === "raquel" || nome === "raquel ferreira";
+}
+
+function sortAlphabetic(a: Consultor, b: Consultor) {
+  return (a.nome || "").localeCompare(b.nome || "", "pt", {
+    sensitivity: "base",
+  });
 }
 
 function sleep(ms: number) {
@@ -116,21 +119,33 @@ export default function HomePage() {
   }, []);
 
   const { featured, others } = useMemo(() => {
-    const sorted = [...consultores].sort((a, b) => {
+    const sortedAll = [...consultores].sort((a, b) => {
+      const rankDiff = getStatusRank(a) - getStatusRank(b);
+      if (rankDiff !== 0) return rankDiff;
+      return sortAlphabetic(a, b);
+    });
+
+    const featuredRaw = sortedAll.filter((c) => Number(c.destaque ?? 0) === 1);
+
+    const featuredSorted = [...featuredRaw].sort((a, b) => {
+      const aRaquel = isRaquel(a);
+      const bRaquel = isRaquel(b);
+
+      if (aRaquel && !bRaquel) return -1;
+      if (!aRaquel && bRaquel) return 1;
+
       const rankDiff = getStatusRank(a) - getStatusRank(b);
       if (rankDiff !== 0) return rankDiff;
 
-      return (a.nome || "").localeCompare(b.nome || "", "pt", {
-        sensitivity: "base",
-      });
+      return sortAlphabetic(a, b);
     });
 
-    const featuredList = sorted.filter((c) => Number(c.destaque ?? 0) === 1);
-    const featuredIds = new Set(featuredList.map((c) => c.id));
-    const rest = sorted.filter((c) => !featuredIds.has(c.id));
+    const featuredIds = new Set(featuredSorted.map((c) => c.id));
+
+    const rest = sortedAll.filter((c) => !featuredIds.has(c.id));
 
     return {
-      featured: featuredList,
+      featured: featuredSorted,
       others: rest,
     };
   }, [consultores]);
@@ -139,43 +154,45 @@ export default function HomePage() {
     <div style={styles.page}>
       <Hero />
 
-      <section style={styles.section}>
+      {featured.length > 0 && (
+        <section style={styles.section}>
+          <h2 style={styles.sectionTitle}>Consultores em destaque</h2>
+
+          <div style={styles.featureGrid}>
+            {featured.map((c) => (
+              <ConsultorCard key={c.id} c={c} variant="featured" />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section id="consultores" style={styles.section}>
         <h2 style={styles.sectionTitle}>Consultores disponíveis</h2>
 
         {loading && (
-          <div style={{ opacity: 0.75, marginTop: 10 }}>A carregar…</div>
+          <div style={{ opacity: 0.75, marginTop: 10, textAlign: "center" }}>
+            A carregar…
+          </div>
         )}
 
         {err && <div style={styles.err}>Erro: {err}</div>}
 
-        {!loading && !err && featured.length > 0 && (
-          <div style={styles.featureWrap}>
-            <div style={styles.featureGrid}>
-              {featured.map((c) => (
-                <div key={c.id} style={styles.featureSlot}>
-                  <ConsultorCard c={c} variant="featured" />
-                </div>
-              ))}
-            </div>
+        {!loading && !err && others.length > 0 && (
+          <div style={styles.grid}>
+            {others.map((c) => (
+              <ConsultorCard key={c.id} c={c} variant="grid" />
+            ))}
           </div>
         )}
-      </section>
-
-      <section style={styles.section}>
-        <div style={styles.grid}>
-          {others.map((c) => (
-            <ConsultorCard key={c.id} c={c} variant="grid" />
-          ))}
-        </div>
 
         {!loading && !err && consultores.length === 0 && (
-          <div style={{ opacity: 0.7, marginTop: 10 }}>
+          <div style={{ opacity: 0.7, marginTop: 10, textAlign: "center" }}>
             Ainda não há consultores disponíveis.
           </div>
         )}
 
         {!loading && !err && consultores.length > 0 && others.length === 0 && (
-          <div style={{ opacity: 0.7, marginTop: 10 }}>
+          <div style={{ opacity: 0.7, marginTop: 10, textAlign: "center" }}>
             Todos os consultores atuais estão em destaque.
           </div>
         )}
@@ -187,6 +204,7 @@ export default function HomePage() {
     </div>
   );
 }
+
 function ConsultorCard({
   c,
   variant,
@@ -284,15 +302,16 @@ function ConsultorCard({
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json?.ok) {
-  setWaitingText(null);
-  alert("ERRO REAL: " + JSON.stringify(json));
-  return;
-}
+        setWaitingText(null);
+        alert(json?.error || "Erro ao iniciar pedido de chat.");
+        return;
+      }
+
       const sessionId = String(json?.session_id ?? "");
 
       if (!sessionId) {
         setWaitingText(null);
-        alert("Sessão inválida.");
+        alert("Consulta inválida.");
         return;
       }
 
@@ -337,7 +356,7 @@ function ConsultorCard({
 
         if (status === "ended") {
           setWaitingText(null);
-          alert("A sessão terminou antes de começar.");
+          alert("A consulta terminou antes de começar.");
           return;
         }
       }
@@ -404,11 +423,7 @@ function ConsultorCard({
           )}
         </div>
 
-        {waitingText && (
-          <div style={S.waitingBox}>
-            {waitingText}
-          </div>
-        )}
+        {waitingText && <div style={S.waitingBox}>{waitingText}</div>}
 
         <div style={S.btns}>
           <button
@@ -440,6 +455,7 @@ function ConsultorCard({
     </div>
   );
 }
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
@@ -464,7 +480,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   sectionTitle: {
-    margin: "6px 0 14px",
+    margin: "6px 0 16px",
     textAlign: "center",
     fontSize: 34,
     fontWeight: 950,
@@ -474,27 +490,17 @@ const styles: Record<string, React.CSSProperties> = {
       "0 0 14px rgba(212,175,55,0.35), 0 0 26px rgba(212,175,55,0.22), 0 8px 22px rgba(0,0,0,0.55)",
   },
 
-  featureWrap: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-start",
-    marginBottom: 24,
-  },
-
   featureGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 320px))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 320px))",
     justifyContent: "center",
     gap: 18,
-  },
-
-  featureSlot: {
-    width: 320,
+    alignItems: "start",
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 240px))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 240px))",
     justifyContent: "center",
     gap: 18,
     alignItems: "start",
@@ -503,12 +509,13 @@ const styles: Record<string, React.CSSProperties> = {
   err: {
     color: "#ffb4b4",
     marginTop: 10,
+    textAlign: "center",
   },
 };
 
 const featuredCard: Record<string, React.CSSProperties> = {
   card: {
-    width: 320,
+    width: "100%",
     minHeight: 490,
     borderRadius: 18,
     overflow: "hidden",
@@ -630,6 +637,18 @@ const featuredCard: Record<string, React.CSSProperties> = {
     overflow: "hidden",
   },
 
+  waitingBox: {
+    marginTop: 10,
+    padding: "8px 10px",
+    borderRadius: 10,
+    background: "rgba(26,63,130,0.35)",
+    border: "1px solid rgba(140,180,255,0.25)",
+    color: "#dce8ff",
+    fontSize: 12,
+    fontWeight: 700,
+    textAlign: "center",
+  },
+
   btns: {
     marginTop: "auto",
     display: "grid",
@@ -674,7 +693,7 @@ const gridCard: Record<string, React.CSSProperties> = {
 
   card: {
     ...featuredCard.card,
-    width: 240,
+    width: "100%",
     minHeight: 430,
     borderRadius: 16,
   },
