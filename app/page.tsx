@@ -458,7 +458,7 @@ function ConsultorCard({
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    padding: "14px 12px 48px",
+    padding: "18px 18px 60px",
     color: "#fff",
     backgroundImage: "url('/fundo.jpg')",
     backgroundSize: "cover",
@@ -469,22 +469,22 @@ const styles: Record<string, React.CSSProperties> = {
   section: {
     maxWidth: 1180,
     margin: "0 auto",
-    padding: "10px 0",
+    padding: "14px 6px",
   },
 
   testemunhosSection: {
     maxWidth: 1180,
-    margin: "12px auto 0",
-    padding: "8px 0 18px",
+    margin: "10px auto 0",
+    padding: "10px 6px 20px",
   },
 
   sectionTitle: {
-    margin: "4px 0 14px",
+    margin: "6px 0 18px",
     textAlign: "center",
-    fontSize: "clamp(28px, 7vw, 34px)",
+    fontSize: "clamp(30px, 4vw, 40px)",
     lineHeight: 1.1,
     fontWeight: 950,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
     color: "#f7df99",
     textShadow:
       "0 0 14px rgba(212,175,55,0.35), 0 0 26px rgba(212,175,55,0.22), 0 8px 22px rgba(0,0,0,0.55)",
@@ -492,15 +492,17 @@ const styles: Record<string, React.CSSProperties> = {
 
   featureGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 16,
+    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 320px))",
+    justifyContent: "center",
+    gap: 18,
     alignItems: "start",
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 16,
+    gridTemplateColumns: "repeat(auto-fit, minmax(235px, 250px))",
+    justifyContent: "center",
+    gap: 18,
     alignItems: "start",
   },
 
@@ -514,21 +516,20 @@ const styles: Record<string, React.CSSProperties> = {
 const featuredCard: Record<string, React.CSSProperties> = {
   card: {
     width: "100%",
-    minHeight: 470,
+    minHeight: 490,
     borderRadius: 18,
     overflow: "hidden",
     border: "1px solid rgba(212,175,55,0.65)",
-    background: "rgba(0,0,0,0.22)",
+    background: "rgba(0,0,0,0.18)",
     cursor: "pointer",
     boxShadow: "0 18px 40px rgba(0,0,0,0.35)",
     display: "flex",
     flexDirection: "column",
-    backdropFilter: "blur(4px)",
   },
 
   imageBox: {
     position: "relative",
-    height: 210,
+    height: 220,
     background: "rgba(0,0,0,0.25)",
     flexShrink: 0,
   },
@@ -568,10 +569,9 @@ const featuredCard: Record<string, React.CSSProperties> = {
   name: {
     fontSize: 20,
     fontWeight: 900,
-    minHeight: 46,
+    minHeight: 48,
     display: "flex",
     alignItems: "center",
-    lineHeight: 1.15,
   },
 
   status: {
@@ -609,7 +609,6 @@ const featuredCard: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "baseline",
     gap: 6,
-    flexWrap: "wrap",
   },
 
   priceValue: {
@@ -654,40 +653,37 @@ const featuredCard: Record<string, React.CSSProperties> = {
     marginTop: "auto",
     display: "grid",
     gridTemplateColumns: "1fr 1fr 1fr",
-    gap: 8,
+    gap: 10,
     paddingTop: 14,
   },
 
   btnGold: {
-    padding: "10px 8px",
+    padding: "10px 10px",
     borderRadius: 12,
     border: "1px solid rgba(212,175,55,0.95)",
     background: "rgba(212,175,55,0.95)",
     color: "#111",
     fontWeight: 950,
-    fontSize: 13,
     cursor: "pointer",
   },
 
   btnBlue: {
-    padding: "10px 8px",
+    padding: "10px 10px",
     borderRadius: 12,
     border: "1px solid rgba(212,175,55,0.55)",
     background: "rgba(26,63,130,0.55)",
     color: "#f4d78b",
     fontWeight: 950,
-    fontSize: 13,
     cursor: "pointer",
   },
 
   btnPurple: {
-    padding: "10px 8px",
+    padding: "10px 10px",
     borderRadius: 12,
     border: "1px solid rgba(200,140,255,0.55)",
     background: "rgba(120,70,180,0.55)",
     color: "#fff",
     fontWeight: 950,
-    fontSize: 13,
     cursor: "pointer",
   },
 };
@@ -708,7 +704,7 @@ const gridCard: Record<string, React.CSSProperties> = {
 
   name: {
     ...featuredCard.name,
-    fontSize: 18,
+    fontSize: 17,
     minHeight: 42,
   },
 
