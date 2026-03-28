@@ -28,6 +28,21 @@ function formatDateTime(ts?: number) {
   return new Date(ts * 1000).toLocaleString("pt-PT");
 }
 
+function statusLabel(status?: string) {
+  switch (String(status ?? "")) {
+    case "aguarda_pagamento":
+      return "Aguarda pagamento";
+    case "aguarda_resposta":
+      return "Aguarda resposta";
+    case "em_resposta":
+      return "Em resposta";
+    case "respondido":
+      return "Respondido";
+    default:
+      return status || "-";
+  }
+}
+
 export default function ConsultorHistoricoEmailPage() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
@@ -87,7 +102,7 @@ export default function ConsultorHistoricoEmailPage() {
               <div key={item.id} style={styles.card}>
                 <div style={styles.historyTop}>
                   <div>
-                    <div style={styles.title}>Pedido</div>
+                    <div style={styles.title}>Consulta por email</div>
                     <div style={styles.meta}>
                       <b>Cliente:</b> {item.cliente_nome || "-"} ({item.cliente_email || "-"})
                     </div>
@@ -98,7 +113,7 @@ export default function ConsultorHistoricoEmailPage() {
                       <b>Preço:</b> {Number(item.preco_eur ?? 0).toFixed(2)}€
                     </div>
                     <div style={styles.meta}>
-                      <b>Status:</b> {item.status}
+                      <b>Status:</b> {statusLabel(item.status)}
                     </div>
                     <div style={styles.meta}>
                       <b>Criado:</b> {formatDateTime(item.created_at)}
@@ -125,10 +140,10 @@ export default function ConsultorHistoricoEmailPage() {
                 {expanded && (
                   <div style={styles.transcript}>
                     {item.itens?.length ? (
-                      item.itens.map((it) => (
+                      item.itens.map((it, index) => (
                         <div key={it.id} style={styles.message}>
                           <div style={styles.messageRole}>
-                            Pergunta enviada em {formatDateTime(it.created_at)}
+                            Pergunta {index + 1} enviada em {formatDateTime(it.created_at)}
                           </div>
                           <div>
                             <b>Pergunta:</b> {it.pergunta || "-"}
@@ -139,7 +154,7 @@ export default function ConsultorHistoricoEmailPage() {
                         </div>
                       ))
                     ) : (
-                      <div style={styles.meta}>Sem itens neste pedido.</div>
+                      <div style={styles.meta}>Sem itens nesta consulta.</div>
                     )}
                   </div>
                 )}

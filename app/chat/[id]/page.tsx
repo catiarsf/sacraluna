@@ -24,12 +24,6 @@ function formatDuration(totalSeconds: number) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-function shortSessionId(id: string) {
-  if (!id) return "…";
-  if (id.length <= 18) return id;
-  return `${id.slice(0, 8)}...${id.slice(-8)}`;
-}
-
 export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
@@ -137,7 +131,7 @@ export default function ChatPage() {
     if (endingRef.current) return;
     endingRef.current = true;
 
-    alert("O teu saldo esgotou-se. A sessão vai terminar.");
+    alert("O teu saldo esgotou-se. A consulta vai terminar.");
 
     await endSessionSilently();
     broadcastSessionEnded();
@@ -151,7 +145,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!sessionId) {
-      setErr("Sessão em falta. Inicia o chat a partir da página principal.");
+      setErr("Consulta em falta. Inicia o chat a partir da página principal.");
     }
   }, [sessionId]);
 
@@ -187,7 +181,7 @@ export default function ChatPage() {
         const json = await res.json().catch(() => null);
 
         if (!res.ok || !json?.ok) {
-          throw new Error(json?.error || "Não foi possível validar a sessão.");
+          throw new Error(json?.error || "Não foi possível validar a consulta.");
         }
 
         const status = String(json?.session?.status ?? "");
@@ -205,18 +199,18 @@ export default function ChatPage() {
         }
 
         if (status === "ended") {
-          alert("Esta sessão já terminou.");
+          alert("Esta consulta já terminou.");
           goBackToArea();
           return;
         }
 
         if (status !== "active") {
-          throw new Error("Sessão inválida para o chat.");
+          throw new Error("Consulta inválida para o chat.");
         }
 
         setSessionValidated(true);
       } catch (e: any) {
-        setErr(e?.message || "Erro ao validar sessão.");
+        setErr(e?.message || "Erro ao validar consulta.");
       }
     }
 
@@ -433,7 +427,7 @@ export default function ChatPage() {
             return;
           }
 
-          setErr(json?.error || "Erro ao cobrar o minuto da sessão.");
+          setErr(json?.error || "Erro ao cobrar o minuto da consulta.");
           return;
         }
 
@@ -442,7 +436,7 @@ export default function ChatPage() {
         setTotalCharged(Number(json?.total_charged_eur ?? 0));
         setConsultorEarned(Number(json?.consultor_earned_eur ?? 0));
       } catch {
-        setErr("Erro ao comunicar com a cobrança da sessão.");
+        setErr("Erro ao comunicar com a cobrança da consulta.");
       }
     }
 
@@ -532,7 +526,7 @@ export default function ChatPage() {
         </button>
         <div style={styles.errBox}>
           <b>Chat inválido</b>
-          <div>ID de consultor inválido.</div>
+          <div>Consulta inválida.</div>
         </div>
       </div>
     );
@@ -559,7 +553,7 @@ export default function ChatPage() {
 
       {loadingInfo ? (
         <div style={{ opacity: 0.8, marginBottom: 12 }}>
-          A carregar informações da sessão…
+          A carregar informações da consulta…
         </div>
       ) : (
         <div style={styles.infoCard}>
@@ -585,7 +579,7 @@ export default function ChatPage() {
           )}
 
           <div style={styles.infoRow}>
-            <span style={styles.infoLabel}>Tempo da sessão</span>
+            <span style={styles.infoLabel}>Tempo da consulta</span>
             <span style={styles.infoValue}>{formatDuration(elapsedSeconds)}</span>
           </div>
 
@@ -603,17 +597,8 @@ export default function ChatPage() {
 
           {role === "consultor" && (
             <div style={styles.infoRow}>
-              <span style={styles.infoLabel}>Ganho da sessão</span>
+              <span style={styles.infoLabel}>Ganho da consulta</span>
               <span style={styles.infoValue}>{consultorEarned.toFixed(2)}€</span>
-            </div>
-          )}
-
-          {role === "cliente" && (
-            <div style={styles.infoRow}>
-              <span style={styles.infoLabel}>Sessão</span>
-              <span style={styles.infoValueSmall} title={sessionId || ""}>
-                {shortSessionId(sessionId)}
-              </span>
             </div>
           )}
 
@@ -727,13 +712,6 @@ const styles: Record<string, React.CSSProperties> = {
   infoValue: {
     fontWeight: 900,
     color: "#f4d78b",
-  },
-  infoValueSmall: {
-    fontWeight: 700,
-    opacity: 0.9,
-    fontSize: 12,
-    wordBreak: "break-all",
-    textAlign: "right",
   },
   err: { color: "#ffb4b4", marginBottom: 10 },
   errBox: {

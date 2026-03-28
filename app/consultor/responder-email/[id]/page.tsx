@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 
 type EmailItem = {
   id: number;
@@ -29,9 +29,23 @@ function formatDateTime(ts?: number) {
   return new Date(ts * 1000).toLocaleString("pt-PT");
 }
 
+function statusLabel(status?: string) {
+  switch (String(status ?? "")) {
+    case "aguarda_pagamento":
+      return "Aguarda pagamento";
+    case "aguarda_resposta":
+      return "Aguarda resposta";
+    case "em_resposta":
+      return "Em resposta";
+    case "respondido":
+      return "Respondido";
+    default:
+      return status || "-";
+  }
+}
+
 export default function ResponderEmailPage() {
   const params = useParams();
-  const router = useRouter();
   const pedidoId = String((params as any)?.id || "");
 
   const [loading, setLoading] = useState(true);
@@ -119,6 +133,7 @@ export default function ResponderEmailPage() {
     <main style={styles.page}>
       <div style={styles.topRow}>
         <h1 style={styles.h1}>Responder email</h1>
+
         <div style={styles.row}>
           <Link href="/consultor/historico-email" style={styles.linkBtn}>
             ← Voltar
@@ -136,18 +151,28 @@ export default function ResponderEmailPage() {
       ) : (
         <>
           <div style={styles.card}>
-            <div style={styles.title}>Pedido {pedido.id}</div>
-            <div style={styles.meta}><b>Cliente:</b> {pedido.cliente_nome}</div>
-            <div style={styles.meta}><b>Email:</b> {pedido.cliente_email}</div>
-            <div style={styles.meta}><b>Pacote:</b> {pedido.pacote}</div>
-            <div style={styles.meta}><b>Status:</b> {pedido.status}</div>
-            <div style={styles.meta}><b>Criado:</b> {formatDateTime(pedido.created_at)}</div>
+            <div style={styles.title}>Consulta por email</div>
+            <div style={styles.meta}>
+              <b>Cliente:</b> {pedido.cliente_nome || "Cliente"}
+            </div>
+            <div style={styles.meta}>
+              <b>Email:</b> {pedido.cliente_email || "-"}
+            </div>
+            <div style={styles.meta}>
+              <b>Pacote:</b> {pedido.pacote}
+            </div>
+            <div style={styles.meta}>
+              <b>Status:</b> {statusLabel(pedido.status)}
+            </div>
+            <div style={styles.meta}>
+              <b>Criado:</b> {formatDateTime(pedido.created_at)}
+            </div>
           </div>
 
           <div style={styles.list}>
-            {(pedido.itens || []).map((item) => (
+            {(pedido.itens || []).map((item, index) => (
               <div key={item.id} style={styles.card}>
-                <div style={styles.questionTitle}>Pergunta</div>
+                <div style={styles.questionTitle}>Pergunta {index + 1}</div>
                 <div style={styles.questionText}>{item.pergunta || "-"}</div>
 
                 <label style={styles.label}>Resposta</label>

@@ -83,7 +83,7 @@ export default function ClienteEmailsPage() {
   return (
     <main style={styles.page}>
       <div style={styles.topRow}>
-        <h1 style={styles.h1}>Os meus pedidos por email</h1>
+        <h1 style={styles.h1}>As minhas consultas por email</h1>
 
         <div style={styles.actions}>
           <Link href="/cliente" style={styles.linkBtn}>
@@ -102,7 +102,7 @@ export default function ClienteEmailsPage() {
         <div style={styles.card}>A carregar...</div>
       ) : pedidos.length === 0 ? (
         <div style={styles.card}>
-          Ainda não tens pedidos de consulta por email.
+          Ainda não tens consultas por email.
         </div>
       ) : (
         <div style={styles.list}>
@@ -116,7 +116,7 @@ export default function ClienteEmailsPage() {
               <div key={pedido.id} style={styles.card}>
                 <div style={styles.headerCard}>
                   <div>
-                    <div style={styles.title}>Pedido</div>
+                    <div style={styles.title}>Consulta por email</div>
                     <div style={styles.meta}>
                       <b>Consultora:</b> {pedido.consultor_nome || "-"}
                     </div>
@@ -159,10 +159,10 @@ export default function ClienteEmailsPage() {
                 {expanded && (
                   <div style={styles.transcript}>
                     {pedido.itens?.length ? (
-                      pedido.itens.map((it) => (
+                      pedido.itens.map((it, index) => (
                         <div key={it.id} style={styles.message}>
                           <div style={styles.messageRole}>
-                            Pergunta enviada em {formatDateTime(it.created_at)}
+                            Pergunta {index + 1} enviada em {formatDateTime(it.created_at)}
                           </div>
 
                           <div style={styles.block}>
@@ -182,7 +182,7 @@ export default function ClienteEmailsPage() {
                         </div>
                       ))
                     ) : (
-                      <div style={styles.meta}>Ainda não há perguntas neste pedido.</div>
+                      <div style={styles.meta}>Ainda não há perguntas nesta consulta.</div>
                     )}
                   </div>
                 )}

@@ -44,6 +44,21 @@ function formatDuration(totalSeconds?: number) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+function statusLabel(status?: string) {
+  switch (String(status ?? "")) {
+    case "active":
+      return "Ativa";
+    case "ended":
+      return "Terminada";
+    case "pending":
+      return "Pendente";
+    case "rejected":
+      return "Rejeitada";
+    default:
+      return status || "-";
+  }
+}
+
 export default function ConsultorHistoricoChatPage() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
@@ -104,11 +119,21 @@ export default function ConsultorHistoricoChatPage() {
                 <div style={styles.historyTop}>
                   <div>
                     <div style={styles.title}>Consulta</div>
-                    <div style={styles.meta}><b>Cliente:</b> {item.cliente_nome || "-"}</div>
-                    <div style={styles.meta}><b>Dia:</b> {formatOnlyDate(item.started_at || item.created_at)}</div>
-                    <div style={styles.meta}><b>Hora:</b> {formatOnlyTime(item.started_at || item.created_at)}</div>
-                    <div style={styles.meta}><b>Duração:</b> {formatDuration(item.billed_seconds)}</div>
-                    <div style={styles.meta}><b>Status:</b> {item.status}</div>
+                    <div style={styles.meta}>
+                      <b>Cliente:</b> {item.cliente_nome || "-"}
+                    </div>
+                    <div style={styles.meta}>
+                      <b>Dia:</b> {formatOnlyDate(item.started_at || item.created_at)}
+                    </div>
+                    <div style={styles.meta}>
+                      <b>Hora:</b> {formatOnlyTime(item.started_at || item.created_at)}
+                    </div>
+                    <div style={styles.meta}>
+                      <b>Duração:</b> {formatDuration(item.billed_seconds)}
+                    </div>
+                    <div style={styles.meta}>
+                      <b>Status:</b> {statusLabel(item.status)}
+                    </div>
                   </div>
 
                   <button
@@ -125,7 +150,8 @@ export default function ConsultorHistoricoChatPage() {
                       item.messages.map((m, idx) => (
                         <div key={idx} style={styles.message}>
                           <div style={styles.messageRole}>
-                            {m.sender_role === "consultor" ? "Consultor" : "Cliente"} — {formatDateTime(m.sent_at)}
+                            {m.sender_role === "consultor" ? "Consultor" : "Cliente"} —{" "}
+                            {formatDateTime(m.sent_at)}
                           </div>
                           <div style={styles.messageText}>{m.text}</div>
                         </div>
