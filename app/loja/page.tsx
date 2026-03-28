@@ -33,10 +33,11 @@ export default function LojaPage() {
     <main style={styles.page}>
       <div style={styles.wrap}>
         <div style={styles.top}>
-          <h1 style={styles.h1}>Serviços</h1>
+          <div style={styles.kicker}>SacraLuna</div>
+          <h1 style={styles.h1}>Serviços espirituais</h1>
           <p style={styles.sub}>
-            Escolhe o serviço que melhor se adapta ao que procuras. Após o pagamento
-            entrarei em contacto contigo para realizar o serviço.
+            Escolhe o serviço que melhor se adapta ao que procuras. Após o pagamento,
+            entrarei em contacto contigo para realizar o serviço com cuidado, descrição e intenção.
           </p>
         </div>
 
@@ -58,12 +59,11 @@ export default function LojaPage() {
                 </div>
 
                 <div style={styles.cardBody}>
-                  <div style={styles.cardTop}>
-                    <h2 style={styles.cardTitle}>{s.nome}</h2>
-                    <div style={styles.price}>
-                      {Number(s.preco_eur ?? 0).toFixed(2)}€
-                    </div>
+                  <div style={styles.priceBadge}>
+                    {Number(s.preco_eur ?? 0).toFixed(2)}€
                   </div>
+
+                  <h2 style={styles.cardTitle}>{s.nome}</h2>
 
                   <p style={styles.cardDesc}>
                     {s.descricao || "Sem descrição disponível."}
@@ -71,7 +71,7 @@ export default function LojaPage() {
 
                   <div style={styles.actions}>
                     <Link href={`/loja/${s.id}`} style={styles.buyBtn}>
-                      Comprar
+                      Comprar serviço
                     </Link>
                   </div>
                 </div>
@@ -87,7 +87,7 @@ export default function LojaPage() {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    padding: "24px 14px 42px",
+    padding: "28px 14px 48px",
     color: "white",
   },
 
@@ -97,31 +97,44 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   top: {
-    marginBottom: 24,
+    marginBottom: 28,
     textAlign: "center",
   },
 
+  kicker: {
+    color: "#f4d78b",
+    fontWeight: 800,
+    letterSpacing: 1.2,
+    fontSize: 12,
+    textTransform: "uppercase",
+    marginBottom: 10,
+    opacity: 0.9,
+  },
+
   h1: {
-    fontSize: "clamp(28px, 5vw, 36px)",
-    margin: "0 0 10px",
-    fontWeight: 900,
-    lineHeight: 1.1,
+    fontSize: "clamp(30px, 5vw, 42px)",
+    margin: "0 0 12px",
+    fontWeight: 950,
+    lineHeight: 1.05,
+    color: "#fff7d6",
+    textShadow: "0 6px 18px rgba(0,0,0,0.28)",
   },
 
   sub: {
-    maxWidth: 760,
+    maxWidth: 780,
     margin: "0 auto",
-    lineHeight: 1.65,
+    lineHeight: 1.7,
     opacity: 0.9,
     fontSize: "clamp(14px, 2.5vw, 16px)",
   },
 
   emptyBox: {
-    borderRadius: 18,
-    padding: 24,
+    borderRadius: 22,
+    padding: 28,
     background: "rgba(0,0,0,0.24)",
     border: "1px solid rgba(255,255,255,0.10)",
     textAlign: "center",
+    boxShadow: "0 14px 30px rgba(0,0,0,0.18)",
   },
 
   emptyTitle: {
@@ -138,19 +151,22 @@ const styles: Record<string, React.CSSProperties> = {
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(270px, 340px))",
-    gap: 18,
+    gap: 20,
     justifyContent: "center",
+    alignItems: "start",
   },
 
   card: {
-    borderRadius: 20,
+    position: "relative",
+    borderRadius: 24,
     overflow: "hidden",
-    background: "rgba(0,0,0,0.24)",
-    border: "1px solid rgba(212,175,55,0.16)",
-    boxShadow: "0 14px 30px rgba(0,0,0,0.24)",
+    background: "linear-gradient(180deg, rgba(10,10,18,0.88) 0%, rgba(22,18,10,0.82) 100%)",
+    border: "1px solid rgba(212,175,55,0.18)",
+    boxShadow: "0 18px 36px rgba(0,0,0,0.28)",
     display: "flex",
     flexDirection: "column",
     width: "100%",
+    minHeight: 500,
   },
 
   imageWrap: {
@@ -162,6 +178,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     padding: 10,
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
   },
 
   image: {
@@ -172,38 +189,36 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   cardBody: {
-    padding: 16,
+    padding: 18,
     display: "grid",
     gap: 12,
+    flex: 1,
   },
 
-  cardTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
+  priceBadge: {
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(212,175,55,0.14)",
+    border: "1px solid rgba(212,175,55,0.35)",
+    color: "#f4d78b",
+    fontWeight: 900,
+    fontSize: 16,
   },
 
   cardTitle: {
     margin: 0,
-    fontSize: "clamp(20px, 4vw, 22px)",
-    fontWeight: 900,
+    fontSize: "clamp(22px, 4vw, 24px)",
+    fontWeight: 950,
     color: "#ffffff",
-    lineHeight: 1.2,
-  },
-
-  price: {
-    fontSize: "clamp(20px, 4vw, 22px)",
-    fontWeight: 900,
-    color: "#f4d78b",
-    whiteSpace: "nowrap",
+    lineHeight: 1.15,
   },
 
   cardDesc: {
     margin: 0,
-    lineHeight: 1.6,
-    opacity: 0.9,
-    minHeight: 72,
+    lineHeight: 1.7,
+    opacity: 0.92,
+    minHeight: 96,
     display: "-webkit-box",
     WebkitLineClamp: 4,
     WebkitBoxOrient: "vertical" as const,
@@ -214,12 +229,15 @@ const styles: Record<string, React.CSSProperties> = {
   actions: {
     display: "flex",
     justifyContent: "flex-start",
-    marginTop: 4,
+    marginTop: "auto",
+    paddingTop: 6,
   },
 
   buyBtn: {
-    display: "inline-block",
-    padding: "12px 16px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
     borderRadius: 14,
     textDecoration: "none",
     border: "1px solid rgba(212,175,55,0.60)",
@@ -229,5 +247,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     whiteSpace: "nowrap",
     fontSize: 15,
+    boxShadow: "0 10px 20px rgba(0,0,0,0.18)",
   },
 };

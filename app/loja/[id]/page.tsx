@@ -123,7 +123,7 @@ export default function LojaDetalhePage() {
     return (
       <main style={styles.page}>
         <div style={styles.wrap}>
-          <div style={styles.box}>A carregar serviço...</div>
+          <div style={styles.loadingBox}>A carregar serviço...</div>
         </div>
       </main>
     );
@@ -167,9 +167,11 @@ export default function LojaDetalhePage() {
             </div>
 
             <div style={styles.info}>
+              <div style={styles.kicker}>Serviço espiritual</div>
+
               <div style={styles.topRow}>
                 <h1 style={styles.h1}>{servico.nome}</h1>
-                <div style={styles.price}>
+                <div style={styles.priceBadge}>
                   {Number(servico.preco_eur ?? 0).toFixed(2)}€
                 </div>
               </div>
@@ -182,17 +184,25 @@ export default function LojaDetalhePage() {
               </div>
             </div>
           </section>
-<section style={styles.formCard}>
+
+          <section style={styles.formCard}>
+            <div style={styles.formKicker}>Pedido de serviço</div>
             <h2 style={styles.h2}>Dados para contacto</h2>
             <p style={styles.formSub}>
-              Depois do pagamento, entrarei em contacto contigo para realizar este serviço.
+              Depois do pagamento, entrarei em contacto contigo para realizar este
+              serviço com cuidado, descrição e intenção.
             </p>
 
-            {erro && <div style={styles.inlineError}>{erro}</div>}
+            {erro ? <div style={styles.inlineError}>{erro}</div> : null}
 
             <form onSubmit={onSubmit} style={styles.form}>
               <label style={styles.label}>Nome</label>
-              <input style={styles.input} value={nome} onChange={(e) => setNome(e.target.value)} />
+              <input
+                style={styles.input}
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="O teu nome"
+              />
 
               <label style={styles.label}>Email</label>
               <input
@@ -200,6 +210,7 @@ export default function LojaDetalhePage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 type="email"
+                placeholder="O teu email"
               />
 
               <label style={styles.label}>Telefone / WhatsApp</label>
@@ -207,6 +218,7 @@ export default function LojaDetalhePage() {
                 style={styles.input}
                 value={telefone}
                 onChange={(e) => setTelefone(e.target.value)}
+                placeholder="O teu contacto"
               />
 
               <label style={styles.label}>Notas adicionais</label>
@@ -214,6 +226,7 @@ export default function LojaDetalhePage() {
                 style={styles.textarea}
                 value={notas}
                 onChange={(e) => setNotas(e.target.value)}
+                placeholder="Escreve aqui alguma informação importante para este pedido..."
               />
 
               <button type="submit" style={styles.payBtn} disabled={submitting}>
@@ -230,7 +243,7 @@ export default function LojaDetalhePage() {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    padding: "24px 14px 42px",
+    padding: "28px 14px 48px",
     color: "white",
   },
 
@@ -240,52 +253,58 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   backBtn: {
-    marginBottom: 18,
-    padding: "10px 14px",
-    borderRadius: 12,
-    border: "1px solid rgba(212,175,55,0.55)",
+    marginBottom: 20,
+    padding: "11px 16px",
+    borderRadius: 14,
+    border: "1px solid rgba(212,175,55,0.40)",
     background: "rgba(0,0,0,0.24)",
     color: "#f4d78b",
     fontWeight: 900,
     cursor: "pointer",
+    boxShadow: "0 10px 22px rgba(0,0,0,0.18)",
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-    gap: 18,
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: 20,
+    alignItems: "start",
   },
 
   serviceCard: {
-    borderRadius: 20,
-    background: "rgba(0,0,0,0.24)",
-    border: "1px solid rgba(212,175,55,0.16)",
-    padding: 16,
+    borderRadius: 24,
+    background: "linear-gradient(180deg, rgba(10,10,18,0.88) 0%, rgba(22,18,10,0.82) 100%)",
+    border: "1px solid rgba(212,175,55,0.18)",
+    padding: 18,
+    boxShadow: "0 18px 36px rgba(0,0,0,0.28)",
   },
 
   formCard: {
-    borderRadius: 20,
-    background: "rgba(0,0,0,0.24)",
-    border: "1px solid rgba(212,175,55,0.16)",
-    padding: 16,
+    borderRadius: 24,
+    background: "rgba(8,10,18,0.84)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    padding: 18,
+    boxShadow: "0 18px 36px rgba(0,0,0,0.26)",
   },
 
   imageWrap: {
     width: "100%",
-    minHeight: 260,
-    borderRadius: 18,
+    minHeight: 300,
+    borderRadius: 20,
     overflow: "hidden",
     background: "rgba(10,10,20,0.75)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: 10,
+    padding: 12,
+    border: "1px solid rgba(255,255,255,0.06)",
   },
 
   image: {
     width: "100%",
-    maxHeight: 420,
+    maxHeight: 440,
     objectFit: "contain",
+    display: "block",
   },
 
   info: {
@@ -294,52 +313,95 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 16,
   },
 
+  kicker: {
+    color: "#f4d78b",
+    fontWeight: 800,
+    letterSpacing: 1.1,
+    fontSize: 12,
+    textTransform: "uppercase",
+    opacity: 0.88,
+  },
+
   topRow: {
     display: "flex",
     justifyContent: "space-between",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 12,
+    alignItems: "flex-start",
   },
 
   h1: {
-    fontSize: "clamp(26px, 5vw, 32px)",
-    fontWeight: 900,
+    margin: 0,
+    fontSize: "clamp(28px, 5vw, 34px)",
+    fontWeight: 950,
+    lineHeight: 1.08,
+    color: "#fff7d6",
   },
 
-  price: {
-    fontSize: "clamp(22px, 4vw, 28px)",
-    fontWeight: 900,
+  priceBadge: {
+    padding: "10px 14px",
+    borderRadius: 999,
+    background: "rgba(212,175,55,0.14)",
+    border: "1px solid rgba(212,175,55,0.35)",
     color: "#f4d78b",
+    fontWeight: 950,
+    fontSize: "clamp(20px, 4vw, 24px)",
+    whiteSpace: "nowrap",
   },
 
   descriptionBox: {
-    padding: 16,
-    borderRadius: 16,
+    padding: 18,
+    borderRadius: 18,
     background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.06)",
   },
 
   sectionTitle: {
     fontSize: 13,
     color: "#f4d78b",
     marginBottom: 10,
+    fontWeight: 800,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
   },
 
   desc: {
-    lineHeight: 1.7,
+    margin: 0,
+    lineHeight: 1.8,
+    opacity: 0.94,
+    fontSize: 15,
+  },
+
+  formKicker: {
+    color: "#f4d78b",
+    fontWeight: 800,
+    letterSpacing: 1.1,
+    fontSize: 12,
+    textTransform: "uppercase",
+    opacity: 0.88,
+    marginBottom: 10,
   },
 
   h2: {
-    fontSize: 22,
-    color: "#f4d78b",
+    fontSize: 24,
+    color: "#fff7d6",
+    margin: "0 0 10px",
+    fontWeight: 900,
   },
 
   formSub: {
-    marginBottom: 14,
+    marginBottom: 16,
+    lineHeight: 1.65,
+    opacity: 0.9,
   },
 
   inlineError: {
-    marginBottom: 10,
-    color: "red",
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    background: "rgba(255,0,0,0.10)",
+    border: "1px solid rgba(255,0,0,0.25)",
+    color: "#ffb4b4",
   },
 
   form: {
@@ -349,38 +411,57 @@ const styles: Record<string, React.CSSProperties> = {
 
   label: {
     fontSize: 12,
+    fontWeight: 800,
+    opacity: 0.88,
+    marginTop: 4,
   },
 
   input: {
-    padding: 12,
-    borderRadius: 12,
-    background: "#111",
+    padding: 13,
+    borderRadius: 14,
+    background: "rgba(0,0,0,0.36)",
     color: "white",
+    border: "1px solid rgba(255,255,255,0.10)",
+    outline: "none",
   },
 
   textarea: {
-    padding: 12,
-    borderRadius: 12,
-    background: "#111",
+    padding: 13,
+    borderRadius: 14,
+    background: "rgba(0,0,0,0.36)",
     color: "white",
-    minHeight: 120,
+    border: "1px solid rgba(255,255,255,0.10)",
+    outline: "none",
+    minHeight: 130,
+    resize: "vertical",
   },
 
   payBtn: {
-    marginTop: 8,
-    padding: 14,
-    borderRadius: 14,
-    background: "#f4d78b",
+    marginTop: 10,
+    padding: 15,
+    borderRadius: 16,
+    background:
+      "linear-gradient(180deg, rgba(212,175,55,0.98) 0%, rgba(180,140,35,0.98) 100%)",
     color: "#111",
-    fontWeight: 900,
+    fontWeight: 950,
+    border: "1px solid rgba(212,175,55,0.60)",
+    cursor: "pointer",
+    fontSize: 15,
+    boxShadow: "0 10px 20px rgba(0,0,0,0.18)",
   },
 
-  box: {
-    padding: 20,
+  loadingBox: {
+    padding: 24,
+    borderRadius: 18,
+    background: "rgba(0,0,0,0.22)",
+    border: "1px solid rgba(255,255,255,0.10)",
   },
 
   errorBox: {
-    padding: 20,
-    color: "red",
+    padding: 24,
+    borderRadius: 18,
+    background: "rgba(255,0,0,0.10)",
+    border: "1px solid rgba(255,0,0,0.20)",
+    color: "#ffb4b4",
   },
 };

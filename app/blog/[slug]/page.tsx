@@ -82,98 +82,106 @@ export default async function BlogPostPage(ctx: Ctx) {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    padding: "28px 16px 48px",
+    padding: "30px 16px 54px",
     color: "white",
   },
 
   wrap: {
-    maxWidth: 900,
+    maxWidth: 920,
     margin: "0 auto",
   },
 
   backLink: {
     display: "inline-block",
-    marginBottom: 18,
+    marginBottom: 20,
     color: "#f4d78b",
     textDecoration: "none",
     fontWeight: 800,
+    fontSize: 14,
+    letterSpacing: 0.2,
   },
 
   article: {
-    borderRadius: 22,
-    background: "rgba(0,0,0,0.24)",
-    border: "1px solid rgba(212,175,55,0.16)",
-    boxShadow: "0 14px 30px rgba(0,0,0,0.24)",
+    borderRadius: 26,
+    background: "rgba(8,10,18,0.84)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "0 18px 36px rgba(0,0,0,0.26)",
     overflow: "hidden",
-    padding: 18,
+    padding: 22,
   },
 
   meta: {
-    fontSize: 13,
-    opacity: 0.7,
-    marginBottom: 10,
+    fontSize: 12,
+    opacity: 0.68,
+    marginBottom: 12,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
 
   h1: {
-    fontSize: 38,
-    margin: "0 0 18px",
-    color: "#ffffff",
-    lineHeight: 1.15,
-    fontWeight: 900,
+    fontSize: "clamp(30px, 5vw, 46px)",
+    margin: "0 0 20px",
+    color: "#fff",
+    lineHeight: 1.08,
+    fontWeight: 950,
   },
 
   image: {
     width: "100%",
-    maxHeight: 520,
+    maxHeight: 540,
     objectFit: "contain",
-    borderRadius: 18,
-    marginBottom: 20,
+    borderRadius: 20,
+    marginBottom: 22,
     display: "block",
     background: "rgba(10,10,20,0.75)",
-    padding: 10,
+    padding: 12,
+    border: "1px solid rgba(255,255,255,0.06)",
   },
 
   resumo: {
-    fontSize: 18,
-    lineHeight: 1.7,
-    opacity: 0.92,
-    marginBottom: 20,
+    fontSize: "clamp(17px, 2.4vw, 20px)",
+    lineHeight: 1.8,
+    opacity: 0.94,
+    margin: "0 0 22px",
     color: "#f4d78b",
+    fontStyle: "italic",
   },
 
   contentBox: {
-    borderRadius: 18,
+    borderRadius: 20,
     border: "1px solid rgba(255,255,255,0.10)",
     background: "rgba(255,255,255,0.03)",
-    padding: 18,
+    padding: 22,
   },
 
   conteudo: {
     whiteSpace: "pre-wrap",
-    lineHeight: 1.9,
-    fontSize: 17,
-    opacity: 0.95,
+    lineHeight: 1.95,
+    fontSize: "clamp(16px, 2.2vw, 18px)",
+    opacity: 0.96,
   },
 
   notFoundBox: {
     maxWidth: 700,
     margin: "0 auto",
     textAlign: "center",
-    borderRadius: 20,
-    padding: 28,
+    borderRadius: 22,
+    padding: 30,
     background: "rgba(0,0,0,0.24)",
     border: "1px solid rgba(255,255,255,0.10)",
+    boxShadow: "0 18px 36px rgba(0,0,0,0.22)",
   },
 
   notFoundTitle: {
     margin: "0 0 16px",
     color: "#f4d78b",
+    fontSize: 28,
   },
 
   backBtn: {
     display: "inline-block",
-    padding: "10px 14px",
-    borderRadius: 12,
+    padding: "11px 16px",
+    borderRadius: 14,
     textDecoration: "none",
     color: "#111",
     background:
