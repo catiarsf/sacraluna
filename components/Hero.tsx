@@ -7,7 +7,7 @@ export default function Hero() {
     <section style={styles.hero}>
       <div style={styles.inner}>
         <div style={styles.scriptWrap}>
-          <h1 style={styles.title}>
+          <h1 className="hero-script-title" style={styles.title}>
             Orientação espiritual com clareza, discrição e verdade
           </h1>
         </div>
@@ -49,13 +49,13 @@ export default function Hero() {
 const styles: Record<string, React.CSSProperties> = {
   hero: {
     maxWidth: 1180,
-    margin: "0 auto 14px",
-    padding: "14px 16px 10px",
+    margin: "0 auto 10px",
+    padding: "8px 10px 8px",
     textAlign: "center",
   },
 
   inner: {
-    maxWidth: 860,
+    maxWidth: 920,
     margin: "0 auto",
   },
 
@@ -67,13 +67,14 @@ const styles: Record<string, React.CSSProperties> = {
 
   title: {
     margin: 0,
-    fontSize: "clamp(28px, 4.8vw, 52px)",
-    lineHeight: 1.2,
+    fontSize: "clamp(22px, 6vw, 52px)",
+    lineHeight: 1.25,
     fontWeight: 500,
     color: "#fff7d6",
     fontFamily:
       '"Brush Script MT", "Lucida Handwriting", "Segoe Script", "Snell Roundhand", cursive',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
     textAlign: "center",
+    padding: "0 8px",
   },
 };
