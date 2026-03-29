@@ -1,316 +1,252 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import db, { getOrCreateWallet } from "@/lib/db";
 
-export const dynamic = "force-dynamic";
-
-function toNumber(v: any) {
-  const n = Number.parseFloat(String(v ?? "0").replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
-
-function round2(v: number) {
-  return Math.round((v + Number.EPSILON) * 100) / 100;
+function round2(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 export async function POST(req: Request) {
   try {
-    const authSession = await getSession();
-    const user = authSession.user;
-
-    if (!user || !user.id) {
-      return NextResponse.json(
-        { ok: false, error: "Não autenticado." },
-        { status: 401 }
-      );
-    }
-
-    if (user.role !== "cliente") {
-      return NextResponse.json(
-        { ok: false, error: "Só clientes podem ser cobrados aqui." },
-        { status: 403 }
-      );
-    }
-
     const body = await req.json().catch(() => ({}));
-    const sessionId = String(body?.sessionId ?? body?.session_id ?? "").trim();
+    const sessionId = String(body?.sessionId ?? "").trim();
 
     if (!sessionId) {
       return NextResponse.json(
-        { ok: false, error: "Sessão inválida." },
+        { ok: false, error: "sessionId em falta." },
         { status: 400 }
       );
     }
 
-    const chatSession = db
+    const session = db
       .prepare(
         `
-        SELECT
-          id,
-          cliente_id,
-          consultor_id,
-          status,
-          price_per_min,
-          billed_seconds,
-          total_charged_eur,
-          consultor_earned_eur
+        SELECT *
         FROM chat_sessions
         WHERE id = ?
         `
       )
       .get(sessionId) as any;
 
-    if (!chatSession) {
+    if (!session) {
       return NextResponse.json(
         { ok: false, error: "Sessão não encontrada." },
         { status: 404 }
       );
     }
 
-    if (Number(chatSession.cliente_id) !== Number(user.id)) {
+    if (!session.cliente_id) {
       return NextResponse.json(
-        { ok: false, error: "Sessão não pertence a este cliente." },
-        { status: 403 }
-      );
-    }
-
-    if (String(chatSession.status) !== "active") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Sessão não está ativa.",
-          code: "SESSION_NOT_ACTIVE",
-        },
+        { ok: false, error: "Sessão sem cliente associado." },
         { status: 400 }
       );
     }
 
-    const precoPorMin = toNumber(chatSession.price_per_min);
+    if (!session.consultor_id) {
+      return NextResponse.json(
+        { ok: false, error: "Sessão sem consultor associado." },
+        { status: 400 }
+      );
+    }
 
-    if (precoPorMin <= 0) {
+    if (session.status === "ended") {
+      return NextResponse.json(
+        { ok: false, error: "A sessão já terminou." },
+        { status: 400 }
+      );
+    }
+
+    const consultor = db
+      .prepare(
+        `
+        SELECT percentagem_ganho
+        FROM consultores
+        WHERE id = ?
+        `
+      )
+      .get(session.consultor_id) as any;
+
+    const percentagem = round2(Number(consultor?.percentagem_ganho ?? 40));
+    const pricePerMin = Number(session.price_per_min || 0);
+
+    if (pricePerMin <= 0) {
       return NextResponse.json(
         { ok: false, error: "Preço por minuto inválido." },
         { status: 400 }
       );
     }
 
-    let walletCliente = db
-      .prepare(
-        `
-        SELECT id, balance_eur, spent_eur
-        FROM wallets
-        WHERE user_type = 'cliente' AND user_id = ?
-        `
-      )
-      .get(user.id) as any;
+    const now = Math.floor(Date.now() / 1000);
+    const startedAt = Number(session.started_at || now);
+    const alreadyBilledSeconds = Number(session.billed_seconds || 0);
+    const totalElapsedSeconds = Math.max(0, now - startedAt);
+    const unbilledSeconds = totalElapsedSeconds - alreadyBilledSeconds;
 
-    if (!walletCliente) {
-      return NextResponse.json(
-        { ok: false, error: "Wallet do cliente não encontrada." },
-        { status: 404 }
-      );
+    if (unbilledSeconds <= 0) {
+      return NextResponse.json({
+        ok: true,
+        charged: 0,
+        wallet_balance: null,
+        billed_seconds: alreadyBilledSeconds,
+        total_charged_eur: Number(session.total_charged_eur || 0),
+        consultor_earned_eur: Number(session.consultor_earned_eur || 0),
+        message: "Nada para faturar.",
+      });
     }
 
-    const saldoCliente = toNumber(walletCliente.balance_eur);
+    const amountToCharge = round2((unbilledSeconds / 60) * pricePerMin);
 
-    if (saldoCliente < precoPorMin) {
-      db.transaction(() => {
-        db.prepare(
-          `
-          UPDATE chat_sessions
-          SET status = 'ended',
-              ended_at = strftime('%s','now')
-          WHERE id = ?
-          `
-        ).run(sessionId);
+    if (amountToCharge <= 0) {
+      return NextResponse.json({
+        ok: true,
+        charged: 0,
+        wallet_balance: null,
+        billed_seconds: alreadyBilledSeconds,
+        total_charged_eur: Number(session.total_charged_eur || 0),
+        consultor_earned_eur: Number(session.consultor_earned_eur || 0),
+        message: "Valor calculado igual a zero.",
+      });
+    }
 
-        db.prepare(
-          `
-          UPDATE consultores
-          SET ocupado = 0,
-              last_seen_at = strftime('%s','now')
-          WHERE id = ?
-          `
-        ).run(chatSession.consultor_id);
-      })();
+    const clienteWallet = getOrCreateWallet("cliente", Number(session.cliente_id));
+    const currentClientBalance = round2(Number(clienteWallet.balance_eur || 0));
+
+    if (currentClientBalance < amountToCharge) {
+      db.prepare(
+        `
+        UPDATE chat_sessions
+        SET status = 'ended',
+            ended_at = COALESCE(ended_at, ?)
+        WHERE id = ?
+        `
+      ).run(now, sessionId);
 
       return NextResponse.json(
         {
           ok: false,
           error: "Saldo insuficiente.",
           code: "INSUFFICIENT_BALANCE",
-          wallet_balance: saldoCliente,
+          needed_eur: amountToCharge,
+          balance_eur: currentClientBalance,
+          session_ended: true,
         },
         { status: 402 }
       );
     }
 
-    const consultorInfo = db
-      .prepare(
-        `
-        SELECT id, percentagem_ganho
-        FROM consultores
-        WHERE id = ?
-        LIMIT 1
-        `
-      )
-      .get(chatSession.consultor_id) as any;
+    const result = db.transaction(() => {
+      const freshClientWallet = getOrCreateWallet("cliente", Number(session.cliente_id));
+      const freshConsultorWallet = getOrCreateWallet("consultor", Number(session.consultor_id));
 
-    if (!consultorInfo) {
-      return NextResponse.json(
-        { ok: false, error: "Consultor não encontrado." },
-        { status: 404 }
+      const clientBalanceNow = round2(Number(freshClientWallet.balance_eur || 0));
+
+      if (clientBalanceNow < amountToCharge) {
+        throw new Error("Saldo insuficiente.");
+      }
+
+      const newClientBalance = round2(clientBalanceNow - amountToCharge);
+      const newClientSpent = round2(Number(freshClientWallet.spent_eur || 0) + amountToCharge);
+
+      db.prepare(
+        `
+        UPDATE wallets
+        SET balance_eur = ?,
+            spent_eur = ?,
+            updated_at = strftime('%s','now')
+        WHERE id = ?
+        `
+      ).run(newClientBalance, newClientSpent, freshClientWallet.id);
+
+      db.prepare(
+        `
+        INSERT INTO wallet_transactions (
+          wallet_id, session_id, type, amount_eur, description
+        ) VALUES (?, ?, 'debit', ?, ?)
+        `
+      ).run(
+        freshClientWallet.id,
+        sessionId,
+        round2(-amountToCharge),
+        `Cobrança chat sessão ${sessionId}`
       );
-    }
 
-    const percentagemConsultor = toNumber(
-      consultorInfo?.percentagem_ganho ?? 40
-    );
+      const consultorShare = round2(amountToCharge * (percentagem / 100));
 
-    const ganhoConsultor = round2(
-      precoPorMin * (percentagemConsultor / 100)
-    );
-
-    let walletConsultor = db
-      .prepare(
-        `
-        SELECT id, balance_eur, earned_eur
-        FROM wallets
-        WHERE user_type = 'consultor' AND user_id = ?
-        `
-      )
-      .get(chatSession.consultor_id) as any;
-
-    if (!walletConsultor) {
-      const info = db
-        .prepare(
-          `
-          INSERT INTO wallets (user_type, user_id, balance_eur, earned_eur, spent_eur)
-          VALUES ('consultor', ?, 0, 0, 0)
-          `
-        )
-        .run(chatSession.consultor_id);
-
-      walletConsultor = db
-        .prepare(
-          `
-          SELECT id, balance_eur, earned_eur
-          FROM wallets
-          WHERE id = ?
-          `
-        )
-        .get(info.lastInsertRowid) as any;
-    }
-
-    const tx = db.transaction(() => {
-      db.prepare(
-        `
-        UPDATE wallets
-        SET
-          balance_eur = balance_eur - ?,
-          spent_eur = spent_eur + ?,
-          updated_at = strftime('%s','now')
-        WHERE id = ?
-        `
-      ).run(precoPorMin, precoPorMin, walletCliente.id);
+      const consultorBalanceNow = round2(Number(freshConsultorWallet.balance_eur || 0));
+      const consultorEarnedNow = round2(Number(freshConsultorWallet.earned_eur || 0));
 
       db.prepare(
         `
         UPDATE wallets
-        SET
-          balance_eur = balance_eur + ?,
-          earned_eur = earned_eur + ?,
-          updated_at = strftime('%s','now')
+        SET balance_eur = ?,
+            earned_eur = ?,
+            updated_at = strftime('%s','now')
         WHERE id = ?
         `
-      ).run(ganhoConsultor, ganhoConsultor, walletConsultor.id);
+      ).run(
+        round2(consultorBalanceNow + consultorShare),
+        round2(consultorEarnedNow + consultorShare),
+        freshConsultorWallet.id
+      );
+
+      db.prepare(
+        `
+        INSERT INTO wallet_transactions (
+          wallet_id, session_id, type, amount_eur, description
+        ) VALUES (?, ?, 'consultor_earned', ?, ?)
+        `
+      ).run(
+        freshConsultorWallet.id,
+        sessionId,
+        consultorShare,
+        `Ganho do consultor na sessão ${sessionId}`
+      );
+
+      const newBilledSeconds = alreadyBilledSeconds + unbilledSeconds;
+      const newTotalCharged = round2(Number(session.total_charged_eur || 0) + amountToCharge);
+      const newConsultorEarnedSession = round2(
+        Number(session.consultor_earned_eur || 0) + consultorShare
+      );
 
       db.prepare(
         `
         UPDATE chat_sessions
-        SET
-          billed_seconds = billed_seconds + 60,
-          total_charged_eur = total_charged_eur + ?,
-          consultor_earned_eur = consultor_earned_eur + ?
+        SET billed_seconds = ?,
+            total_charged_eur = ?,
+            consultor_earned_eur = ?
         WHERE id = ?
-        `
-      ).run(precoPorMin, ganhoConsultor, sessionId);
-
-      db.prepare(
-        `
-        INSERT INTO wallet_transactions (wallet_id, session_id, type, amount_eur, description)
-        VALUES (?, ?, 'debit', ?, ?)
         `
       ).run(
-        walletCliente.id,
-        sessionId,
-        -precoPorMin,
-        "Cobrança de 1 minuto de consulta"
+        newBilledSeconds,
+        newTotalCharged,
+        newConsultorEarnedSession,
+        sessionId
       );
 
-      db.prepare(
-        `
-        INSERT INTO wallet_transactions (wallet_id, session_id, type, amount_eur, description)
-        VALUES (?, ?, 'consultor_earned', ?, ?)
-        `
-      ).run(
-        walletConsultor.id,
-        sessionId,
-        ganhoConsultor,
-        `Ganho de 1 minuto de consulta (${percentagemConsultor}%)`
-      );
-    });
-
-    tx();
-
-    walletCliente = db
-      .prepare(
-        `
-        SELECT id, balance_eur, spent_eur
-        FROM wallets
-        WHERE id = ?
-        `
-      )
-      .get(walletCliente.id) as any;
-
-    walletConsultor = db
-      .prepare(
-        `
-        SELECT id, balance_eur, earned_eur
-        FROM wallets
-        WHERE id = ?
-        `
-      )
-      .get(walletConsultor.id) as any;
-
-    const sessaoAtualizada = db
-      .prepare(
-        `
-        SELECT billed_seconds, total_charged_eur, consultor_earned_eur
-        FROM chat_sessions
-        WHERE id = ?
-        `
-      )
-      .get(sessionId) as any;
+      return {
+        charged: amountToCharge,
+        wallet_balance: newClientBalance,
+        billed_seconds: newBilledSeconds,
+        total_charged_eur: newTotalCharged,
+        consultor_earned_eur: newConsultorEarnedSession,
+      };
+    })();
 
     return NextResponse.json({
       ok: true,
-      wallet_balance: toNumber(walletCliente.balance_eur),
-      consultor_wallet_balance: toNumber(walletConsultor.balance_eur),
-      billed_seconds: Number(sessaoAtualizada?.billed_seconds ?? 0),
-      total_charged_eur: toNumber(
-        sessaoAtualizada?.total_charged_eur ?? 0
-      ),
-      consultor_earned_eur: toNumber(
-        sessaoAtualizada?.consultor_earned_eur ?? 0
-      ),
-      percentagem_consultor: percentagemConsultor,
+      ...result,
     });
   } catch (e: any) {
-    console.error("ERRO /api/chat/bill:", e);
+    console.error("ERRO BILL CHAT:", e);
+
+    if (String(e?.message || "").includes("Saldo insuficiente")) {
+      return NextResponse.json(
+        { ok: false, error: "Saldo insuficiente." },
+        { status: 402 }
+      );
+    }
 
     return NextResponse.json(
-      { ok: false, error: e?.message || "Erro interno do servidor." },
+      { ok: false, error: e?.message || "Erro ao faturar chat." },
       { status: 500 }
     );
   }

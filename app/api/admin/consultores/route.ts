@@ -36,6 +36,7 @@ export async function GET() {
           ativo,
           destaque,
           online,
+          voip_ativo,
           pack_1_qtd,
           pack_1_preco,
           pack_2_qtd,
@@ -84,6 +85,7 @@ export async function POST(req: Request) {
     const ativo = body?.ativo ? 1 : 0;
     const destaque = body?.destaque ? 1 : 0;
     const online = body?.online ? 1 : 0;
+    const voipAtivo = typeof body?.voip_ativo === "undefined" ? 1 : body?.voip_ativo ? 1 : 0;
 
     const pack1Qtd = toInt(body?.pack_1_qtd ?? 1, 1);
     const pack1Preco = toNumber(body?.pack_1_preco ?? 1);
@@ -157,6 +159,7 @@ export async function POST(req: Request) {
           ativo,
           destaque,
           online,
+          voip_ativo,
           pack_1_qtd,
           pack_1_preco,
           pack_2_qtd,
@@ -166,7 +169,7 @@ export async function POST(req: Request) {
           pack_4_qtd,
           pack_4_preco
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
       )
       .run(
@@ -184,6 +187,7 @@ export async function POST(req: Request) {
         ativo,
         destaque,
         online,
+        voipAtivo,
         pack1Qtd,
         pack1Preco,
         pack2Qtd,
@@ -212,6 +216,7 @@ export async function POST(req: Request) {
           ativo,
           destaque,
           online,
+          voip_ativo,
           pack_1_qtd,
           pack_1_preco,
           pack_2_qtd,

@@ -19,6 +19,7 @@ type Consultor = {
   ativo: 0 | 1;
   destaque: 0 | 1;
   online?: 0 | 1;
+  voip_ativo?: 0 | 1;
   pack_1_qtd?: number;
   pack_1_preco?: number;
   pack_2_qtd?: number;
@@ -47,6 +48,7 @@ export default function AdminClient() {
   const [fotoUrl, setFotoUrl] = useState("/consultores/default.jpg");
   const [ativo, setAtivo] = useState(true);
   const [destaque, setDestaque] = useState(false);
+  const [voipAtivo, setVoipAtivo] = useState(true);
 
   const [pack1Qtd, setPack1Qtd] = useState("1");
   const [pack1Preco, setPack1Preco] = useState("1");
@@ -144,6 +146,7 @@ export default function AdminClient() {
         ativo,
         destaque,
         online: false,
+        voip_ativo: voipAtivo,
         pack_1_qtd: Number(pack1Qtd),
         pack_1_preco: Number(pack1Preco),
         pack_2_qtd: Number(pack2Qtd),
@@ -176,6 +179,7 @@ export default function AdminClient() {
       setFotoUrl("/consultores/default.jpg");
       setAtivo(true);
       setDestaque(false);
+      setVoipAtivo(true);
 
       setPack1Qtd("1");
       setPack1Preco("1");
@@ -215,7 +219,7 @@ export default function AdminClient() {
           ativo: edit.ativo === 1,
           destaque: edit.destaque === 1,
           online: edit.online === 1,
-
+          voip_ativo: edit.voip_ativo === 1,
           pack_1_qtd: Number(editPack1Qtd),
           pack_1_preco: Number(editPack1Preco),
           pack_2_qtd: Number(editPack2Qtd),
@@ -291,6 +295,30 @@ export default function AdminClient() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? "Erro ao alterar disponibilidade");
+
+      await load();
+    } catch (e: any) {
+      setErr(String(e?.message ?? e));
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function toggleVoip(c: Consultor) {
+    setErr("");
+    setTogglingId(c.id);
+
+    try {
+      const res = await fetch(`/api/admin/consultores/${c.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voip_ativo: c.voip_ativo !== 1,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "Erro ao alterar VoIP");
 
       await load();
     } catch (e: any) {
@@ -545,6 +573,15 @@ export default function AdminClient() {
               <span>Colocar em destaque</span>
             </label>
 
+            <label style={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={voipAtivo}
+                onChange={(e) => setVoipAtivo(e.target.checked)}
+              />
+              <span>VoIP ativo</span>
+            </label>
+
             <button type="submit" style={styles.btn} disabled={uploading}>
               Criar consultor
             </button>
@@ -572,6 +609,9 @@ export default function AdminClient() {
                     <div style={styles.small}>Voz: {Number(c.preco_voz ?? 0).toFixed(2)}€/min</div>
                     <div style={styles.small}>
                       Percentagem: {Number(c.percentagem_ganho ?? 0).toFixed(0)}%
+                    </div>
+                    <div style={styles.small}>
+                      VoIP: {c.voip_ativo === 1 ? "Ligado" : "Desligado"}
                     </div>
                     <div style={styles.small}>
                       Packs email:{" "}
@@ -604,6 +644,18 @@ export default function AdminClient() {
                       disabled={togglingId === c.id}
                     >
                       Indisponível
+                    </button>
+
+                    <button
+                      style={c.voip_ativo === 1 ? styles.btnWarnSmall : styles.btnGreenSmall}
+                      onClick={() => toggleVoip(c)}
+                      disabled={togglingId === c.id}
+                    >
+                      {togglingId === c.id
+                        ? "A alterar..."
+                        : c.voip_ativo === 1
+                        ? "Desligar VoIP"
+                        : "Ligar VoIP"}
                     </button>
 
                     <button
@@ -862,6 +914,17 @@ export default function AdminClient() {
                 <span>Disponível</span>
               </label>
 
+              <label style={styles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={edit.voip_ativo === 1}
+                  onChange={(e) =>
+                    setEdit({ ...edit, voip_ativo: e.target.checked ? 1 : 0 })
+                  }
+                />
+                <span>VoIP ativo</span>
+              </label>
+
               <div style={styles.modalBtns}>
                 <button
                   type="button"
@@ -888,6 +951,7 @@ export default function AdminClient() {
     </div>
   );
 }
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     padding: 16,

@@ -20,6 +20,7 @@ type Consultor = {
   destaque?: number;
   online?: number;
   ocupado?: number;
+  voip_ativo?: number;
 };
 
 function normalizeFotoUrl(url: string | null) {
@@ -222,6 +223,7 @@ function ConsultorCard({
   const ativo = Number(c.ativo ?? 0) === 1;
   const online = Number(c.online ?? 0) === 1;
   const ocupado = Number(c.ocupado ?? 0) === 1;
+  const voipAtivo = Number(c.voip_ativo ?? 1) === 1;
 
   const [creatingChat, setCreatingChat] = useState(false);
   const [waitingText, setWaitingText] = useState<string | null>(null);
@@ -242,9 +244,16 @@ function ConsultorCard({
     ? "#ffd36b"
     : "#7dffb1";
 
+  const podeLigar = ativo && online && !ocupado && voipAtivo;
+
   async function iniciarChamada(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
     e.stopPropagation();
+
+    if (!voipAtivo) {
+      alert("As chamadas por voz estão desligadas para este consultor.");
+      return;
+    }
 
     if (!ativo || !online || ocupado) {
       alert("Este consultor não está disponível neste momento.");
@@ -405,12 +414,28 @@ function ConsultorCard({
             </div>
           </div>
 
-          <div style={S.priceBlock}>
-            <div style={S.priceLabel}>VOZ</div>
-            <div style={S.priceRow}>
-              <span style={S.priceValue}>{getPrecoVoz(c).toFixed(2)}€</span>
-              <span style={S.priceUnit}>/min</span>
+          <div
+            style={{
+              ...S.priceBlock,
+              ...(voipAtivo ? null : S.priceBlockDisabled),
+            }}
+          >
+            <div
+              style={{
+                ...S.priceLabel,
+                ...(voipAtivo ? null : S.priceLabelDisabled),
+              }}
+            >
+              VOZ
             </div>
+            {voipAtivo ? (
+              <div style={S.priceRow}>
+                <span style={S.priceValue}>{getPrecoVoz(c).toFixed(2)}€</span>
+                <span style={S.priceUnit}>/min</span>
+              </div>
+            ) : (
+              <div style={S.voipOffText}>Indisponível</div>
+            )}
           </div>
         </div>
 
@@ -434,7 +459,13 @@ function ConsultorCard({
             {creatingChat ? "AGUARDA..." : "CHAT"}
           </button>
 
-          <button type="button" style={S.btnBlue} onClick={iniciarChamada}>
+          <button
+            type="button"
+            style={podeLigar ? S.btnBlue : S.btnBlueDisabled}
+            onClick={iniciarChamada}
+            disabled={!podeLigar}
+            title={!voipAtivo ? "Chamadas por voz desligadas" : undefined}
+          >
             VOZ
           </button>
 
@@ -596,6 +627,12 @@ const featuredCard: Record<string, React.CSSProperties> = {
     background: "rgba(255,255,255,0.04)",
   },
 
+  priceBlockDisabled: {
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.02)",
+    opacity: 0.72,
+  },
+
   priceLabel: {
     fontSize: 11,
     fontWeight: 900,
@@ -603,6 +640,10 @@ const featuredCard: Record<string, React.CSSProperties> = {
     color: "#f4d78b",
     opacity: 0.95,
     marginBottom: 4,
+  },
+
+  priceLabelDisabled: {
+    color: "#c7c7c7",
   },
 
   priceRow: {
@@ -620,6 +661,13 @@ const featuredCard: Record<string, React.CSSProperties> = {
   priceUnit: {
     fontSize: 12,
     opacity: 0.8,
+  },
+
+  voipOffText: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#c7c7c7",
+    marginTop: 8,
   },
 
   specWrap: {
@@ -675,6 +723,17 @@ const featuredCard: Record<string, React.CSSProperties> = {
     color: "#f4d78b",
     fontWeight: 950,
     cursor: "pointer",
+  },
+
+  btnBlueDisabled: {
+    padding: "10px 10px",
+    borderRadius: 12,
+    border: "1px solid rgba(170,170,170,0.20)",
+    background: "rgba(90,90,90,0.22)",
+    color: "#c7c7c7",
+    fontWeight: 950,
+    cursor: "not-allowed",
+    opacity: 0.78,
   },
 
   btnPurple: {

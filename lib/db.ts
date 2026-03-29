@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS consultores (
   ativo INTEGER NOT NULL DEFAULT 1,
   destaque INTEGER NOT NULL DEFAULT 0,
   online INTEGER NOT NULL DEFAULT 0,
+  voip_ativo INTEGER NOT NULL DEFAULT 1,
   ocupado INTEGER NOT NULL DEFAULT 0,
   last_seen_at INTEGER,
 
@@ -201,6 +202,9 @@ CREATE TABLE IF NOT EXISTS call_sessions (
   call_sid TEXT,
   price_per_min REAL NOT NULL DEFAULT 0,
   duration_seconds INTEGER NOT NULL DEFAULT 0,
+  total_charged_eur REAL NOT NULL DEFAULT 0,
+  consultor_earned_eur REAL NOT NULL DEFAULT 0,
+  billed INTEGER NOT NULL DEFAULT 0,
   recording_url TEXT,
   created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   started_at INTEGER,
@@ -217,6 +221,7 @@ try { db.exec(`ALTER TABLE consultores ADD COLUMN percentagem_ganho REAL NOT NUL
 try { db.exec(`ALTER TABLE consultores ADD COLUMN foto_url TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN especialidades TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN apresentacao TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE consultores ADD COLUMN voip_ativo INTEGER NOT NULL DEFAULT 1;`); } catch {}
 
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_1_qtd INTEGER NOT NULL DEFAULT 1;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_1_preco REAL NOT NULL DEFAULT 1;`); } catch {}
@@ -236,6 +241,9 @@ try { db.exec(`ALTER TABLE contactos ADD COLUMN responded_at INTEGER;`); } catch
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN call_sid TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN price_per_min REAL NOT NULL DEFAULT 0;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN duration_seconds INTEGER NOT NULL DEFAULT 0;`); } catch {}
+try { db.exec(`ALTER TABLE call_sessions ADD COLUMN total_charged_eur REAL NOT NULL DEFAULT 0;`); } catch {}
+try { db.exec(`ALTER TABLE call_sessions ADD COLUMN consultor_earned_eur REAL NOT NULL DEFAULT 0;`); } catch {}
+try { db.exec(`ALTER TABLE call_sessions ADD COLUMN billed INTEGER NOT NULL DEFAULT 0;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN recording_url TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN started_at INTEGER;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN ended_at INTEGER;`); } catch {}
@@ -279,12 +287,21 @@ export function creditWallet(params: {
   const tx = db.transaction(() => {
     const wallet = getOrCreateWallet(userType, userId);
     const newBalance = round2(Number(wallet.balance_eur || 0) + amount);
+    const newEarned = round2(Number(wallet.earned_eur || 0) + amount);
 
-    db.prepare(`
-      UPDATE wallets
-      SET balance_eur = ?, updated_at = strftime('%s','now')
-      WHERE id = ?
-    `).run(newBalance, wallet.id);
+    if (userType === "consultor") {
+      db.prepare(`
+        UPDATE wallets
+        SET balance_eur = ?, earned_eur = ?, updated_at = strftime('%s','now')
+        WHERE id = ?
+      `).run(newBalance, newEarned, wallet.id);
+    } else {
+      db.prepare(`
+        UPDATE wallets
+        SET balance_eur = ?, updated_at = strftime('%s','now')
+        WHERE id = ?
+      `).run(newBalance, wallet.id);
+    }
 
     db.prepare(`
       INSERT INTO wallet_transactions (
@@ -297,7 +314,11 @@ export function creditWallet(params: {
       description ?? "Crédito wallet"
     );
 
-    return { ...wallet, balance_eur: newBalance };
+    return {
+      ...wallet,
+      balance_eur: newBalance,
+      earned_eur: userType === "consultor" ? newEarned : Number(wallet.earned_eur || 0),
+    };
   });
 
   return tx();

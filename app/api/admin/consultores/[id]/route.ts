@@ -35,11 +35,7 @@ export async function PUT(req: Request, ctx: Ctx) {
     const body = await req.json().catch(() => ({}));
 
     const atual = db
-      .prepare(
-        `
-        SELECT * FROM consultores WHERE id = ?
-        `
-      )
+      .prepare(`SELECT * FROM consultores WHERE id = ?`)
       .get(consultorId) as any;
 
     if (!atual) {
@@ -49,36 +45,34 @@ export async function PUT(req: Request, ctx: Ctx) {
       );
     }
 
-    // 🔥 DETECTA SE É SÓ TOGGLE
     const hasOnlyToggleFields =
       (Object.prototype.hasOwnProperty.call(body, "online") ||
         Object.prototype.hasOwnProperty.call(body, "destaque") ||
-        Object.prototype.hasOwnProperty.call(body, "ativo")) &&
-      Object.keys(body).length <= 3;
+        Object.prototype.hasOwnProperty.call(body, "ativo") ||
+        Object.prototype.hasOwnProperty.call(body, "voip_ativo")) &&
+      Object.keys(body).length <= 4;
 
     if (hasOnlyToggleFields) {
       const online =
         typeof body?.online === "undefined"
           ? Number(atual.online ?? 0)
-          : body?.online
-          ? 1
-          : 0;
+          : body?.online ? 1 : 0;
 
       const ativo =
         typeof body?.ativo === "undefined"
           ? Number(atual.ativo ?? 0)
-          : body?.ativo
-          ? 1
-          : 0;
+          : body?.ativo ? 1 : 0;
 
       const destaque =
         typeof body?.destaque === "undefined"
           ? Number(atual.destaque ?? 0)
-          : body?.destaque
-          ? 1
-          : 0;
+          : body?.destaque ? 1 : 0;
 
-      // 🔥 LIMITE DE DESTAQUE
+      const voipAtivo =
+        typeof body?.voip_ativo === "undefined"
+          ? Number(atual.voip_ativo ?? 1)
+          : body?.voip_ativo ? 1 : 0;
+
       if (destaque === 1 && Number(atual.destaque ?? 0) !== 1) {
         const totalDestaque = db
           .prepare(
@@ -94,7 +88,6 @@ export async function PUT(req: Request, ctx: Ctx) {
         }
       }
 
-      // 🔥 UPDATE SEM BLOQUEIO
       db.prepare(
         `
         UPDATE consultores
@@ -102,10 +95,11 @@ export async function PUT(req: Request, ctx: Ctx) {
           online = ?,
           ativo = ?,
           destaque = ?,
+          voip_ativo = ?,
           last_seen_at = strftime('%s','now')
         WHERE id = ?
         `
-      ).run(online, ativo, destaque, consultorId);
+      ).run(online, ativo, destaque, voipAtivo, consultorId);
 
       const atualizado = db
         .prepare(`SELECT * FROM consultores WHERE id = ?`)
@@ -117,44 +111,32 @@ export async function PUT(req: Request, ctx: Ctx) {
       });
     }
 
-    // 🔥 CAMPOS NORMAIS
     const nome = norm(body?.nome ?? atual.nome);
     const email = norm(body?.email ?? atual.email).toLowerCase();
     const telefone = norm(body?.telefone ?? atual.telefone);
     const password = norm(body?.password);
-    const foto_url =
-      norm(body?.foto_url ?? atual.foto_url) || "/consultores/default.jpg";
-    const especialidades = norm(
-      body?.especialidades ?? atual.especialidades
-    );
+    const foto_url = norm(body?.foto_url ?? atual.foto_url) || "/consultores/default.jpg";
+    const especialidades = norm(body?.especialidades ?? atual.especialidades);
     const apresentacao = norm(body?.apresentacao ?? atual.apresentacao);
 
     const preco_por_min = toNumber(
       body?.preco_por_min ??
-        body?.valor_min_eur ??
-        body?.valor_min ??
-        atual.preco_por_min
+      body?.valor_min_eur ??
+      body?.valor_min ??
+      atual.preco_por_min
     );
 
-    const preco_chat = toNumber(
-      body?.preco_chat ?? atual.preco_chat ?? preco_por_min
-    );
+    const preco_chat = toNumber(body?.preco_chat ?? atual.preco_chat ?? preco_por_min);
+    const preco_voz = toNumber(body?.preco_voz ?? atual.preco_voz ?? preco_por_min);
+    const percentagem_ganho = toNumber(body?.percentagem_ganho ?? atual.percentagem_ganho ?? 40);
 
-    const preco_voz = toNumber(
-      body?.preco_voz ?? atual.preco_voz ?? preco_por_min
-    );
-
-    const percentagem_ganho = toNumber(
-      body?.percentagem_ganho ?? atual.percentagem_ganho ?? 40
-    );
-
-    // 🔥 PACKS
     const pack1Qtd = toInt(body?.pack_1_qtd ?? atual.pack_1_qtd ?? 1, 1);
     const pack1Preco = toNumber(body?.pack_1_preco ?? atual.pack_1_preco ?? 1);
 
     const pack2Qtd = toInt(body?.pack_2_qtd ?? atual.pack_2_qtd ?? 3, 3);
     const pack2Preco = toNumber(body?.pack_2_preco ?? atual.pack_2_preco ?? 3);
-const pack3Qtd = toInt(body?.pack_3_qtd ?? atual.pack_3_qtd ?? 5, 5);
+
+    const pack3Qtd = toInt(body?.pack_3_qtd ?? atual.pack_3_qtd ?? 5, 5);
     const pack3Preco = toNumber(body?.pack_3_preco ?? atual.pack_3_preco ?? 5);
 
     const pack4Qtd = toInt(body?.pack_4_qtd ?? atual.pack_4_qtd ?? 10, 10);
@@ -163,23 +145,22 @@ const pack3Qtd = toInt(body?.pack_3_qtd ?? atual.pack_3_qtd ?? 5, 5);
     const ativo =
       typeof body?.ativo === "undefined"
         ? Number(atual.ativo ?? 0)
-        : body?.ativo
-        ? 1
-        : 0;
+        : body?.ativo ? 1 : 0;
 
     const destaque =
       typeof body?.destaque === "undefined"
         ? Number(atual.destaque ?? 0)
-        : body?.destaque
-        ? 1
-        : 0;
+        : body?.destaque ? 1 : 0;
 
     const online =
       typeof body?.online === "undefined"
         ? Number(atual.online ?? 0)
-        : body?.online
-        ? 1
-        : 0;
+        : body?.online ? 1 : 0;
+
+    const voipAtivo =
+      typeof body?.voip_ativo === "undefined"
+        ? Number(atual.voip_ativo ?? 1)
+        : body?.voip_ativo ? 1 : 0;
 
     if (!nome) {
       return NextResponse.json(
@@ -196,9 +177,7 @@ const pack3Qtd = toInt(body?.pack_3_qtd ?? atual.pack_3_qtd ?? 5, 5);
     }
 
     const emailExiste = db
-      .prepare(
-        `SELECT id FROM consultores WHERE lower(email) = ? AND id <> ?`
-      )
+      .prepare(`SELECT id FROM consultores WHERE lower(email) = ? AND id <> ?`)
       .get(email, consultorId) as any;
 
     if (emailExiste) {
@@ -225,7 +204,6 @@ const pack3Qtd = toInt(body?.pack_3_qtd ?? atual.pack_3_qtd ?? 5, 5);
 
     const passwordFinal = password || atual.password || "";
 
-    // 🔥 UPDATE PRINCIPAL (SEM BLOQUEIO)
     db.prepare(
       `
       UPDATE consultores
@@ -244,6 +222,7 @@ const pack3Qtd = toInt(body?.pack_3_qtd ?? atual.pack_3_qtd ?? 5, 5);
         ativo = ?,
         destaque = ?,
         online = ?,
+        voip_ativo = ?,
         pack_1_qtd = ?,
         pack_1_preco = ?,
         pack_2_qtd = ?,
@@ -270,6 +249,7 @@ const pack3Qtd = toInt(body?.pack_3_qtd ?? atual.pack_3_qtd ?? 5, 5);
       ativo,
       destaque,
       online,
+      voipAtivo,
       pack1Qtd,
       pack1Preco,
       pack2Qtd,
