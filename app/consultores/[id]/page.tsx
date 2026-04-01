@@ -268,8 +268,6 @@ export default function ConsultorPerfilPage() {
             <div style={styles.left}>
               <div style={styles.imageFrame}>
                 <div style={styles.imageBox}>
-                  <div style={styles.imageStarBg} />
-                  <div style={styles.imageGlow} />
                   {foto ? (
                     <img src={foto} alt={consultor.nome} style={styles.image} />
                   ) : (
@@ -375,9 +373,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "28px 18px 64px",
     color: "#fff",
     backgroundImage: "url('/fundo.jpg')",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    backgroundRepeat: "no-repeat",
+    backgroundSize: "auto",
+    backgroundPosition: "top center",
+    backgroundRepeat: "repeat",
   },
 
   wrap: {
@@ -459,47 +457,21 @@ const styles: Record<string, React.CSSProperties> = {
 
   imageBox: {
     position: "relative",
-    height: 380,
+    width: "100%",
+    aspectRatio: "4 / 5",
     borderRadius: 22,
     overflow: "hidden",
     border: "1px solid rgba(255,255,255,0.08)",
     background:
-      "radial-gradient(circle at center, rgba(24,32,54,0.96) 0%, rgba(9,12,20,1) 100%)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    isolation: "isolate",
-  },
-
-  imageStarBg: {
-    position: "absolute",
-    inset: 0,
-    backgroundImage: "url('/fundo.jpg')",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    opacity: 0.55,
-    zIndex: 0,
-    transform: "scale(1.08)",
-  },
-
-  imageGlow: {
-    position: "absolute",
-    inset: 0,
-    background:
-      "radial-gradient(circle at 50% 40%, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.04) 28%, rgba(0,0,0,0) 65%)",
-    zIndex: 1,
+      "linear-gradient(180deg, rgba(20,26,42,0.96) 0%, rgba(10,14,24,1) 100%)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
   },
 
   image: {
-    position: "relative",
-    zIndex: 2,
-    maxWidth: "100%",
-    maxHeight: "100%",
-    width: "auto",
-    height: "auto",
-    objectFit: "contain",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
     display: "block",
-    filter: "drop-shadow(0 10px 26px rgba(0,0,0,0.38))",
   },
 
   placeholder: {
