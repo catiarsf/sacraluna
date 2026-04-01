@@ -270,7 +270,16 @@ export default function ConsultorPerfilPage() {
               <div style={styles.imageFrame}>
                 <div style={styles.imageBox}>
                   {foto ? (
-                    <img src={foto} alt={consultor.nome} style={styles.image} />
+                    <>
+                      <div
+                        style={{
+                          ...styles.imageBg,
+                          backgroundImage: `url(${foto})`,
+                        }}
+                      />
+                      <div style={styles.imageOverlay} />
+                      <img src={foto} alt={consultor.nome} style={styles.image} />
+                    </>
                   ) : (
                     <div style={styles.placeholder}>🌙 Sem foto</div>
                   )}
@@ -432,7 +441,7 @@ const styles: Record<string, React.CSSProperties> = {
     position: "absolute",
     top: 16,
     right: 16,
-    zIndex: 3,
+    zIndex: 4,
     padding: "7px 14px",
     borderRadius: 999,
     fontSize: 11,
@@ -457,6 +466,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   imageBox: {
+    position: "relative",
     height: 380,
     borderRadius: 22,
     overflow: "hidden",
@@ -466,15 +476,37 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+    isolation: "isolate",
+  },
+
+  imageBg: {
+    position: "absolute",
+    inset: 0,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    filter: "blur(26px) brightness(0.42)",
+    transform: "scale(1.18)",
+    zIndex: 0,
+  },
+
+  imageOverlay: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "linear-gradient(180deg, rgba(8,10,16,0.18) 0%, rgba(8,10,16,0.42) 100%)",
+    zIndex: 1,
   },
 
   image: {
-    width: "100%",
-    height: "100%",
+    position: "relative",
+    zIndex: 2,
+    maxWidth: "100%",
+    maxHeight: "100%",
+    width: "auto",
+    height: "auto",
     objectFit: "contain",
     display: "block",
-    backgroundColor: "transparent",
+    filter: "drop-shadow(0 10px 26px rgba(0,0,0,0.35))",
   },
 
   placeholder: {
@@ -636,7 +668,8 @@ const styles: Record<string, React.CSSProperties> = {
   sep: {
     margin: "22px 0 18px",
     height: 1,
-    background: "linear-gradient(90deg, rgba(212,175,55,0.22), rgba(255,255,255,0.04))",
+    background:
+      "linear-gradient(90deg, rgba(212,175,55,0.22), rgba(255,255,255,0.04))",
   },
 
   h3: {

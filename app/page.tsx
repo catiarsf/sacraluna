@@ -394,7 +394,16 @@ function ConsultorCard({
       <div style={S.imageFrame}>
         <div style={S.imageBox}>
           {foto ? (
-            <img src={foto} alt={c.nome} style={S.image} />
+            <>
+              <div
+                style={{
+                  ...S.imageBg,
+                  backgroundImage: `url(${foto})`,
+                }}
+              />
+              <div style={S.imageOverlay} />
+              <img src={foto} alt={c.nome} style={S.image} />
+            </>
           ) : (
             <div style={S.placeholder}>
               <div style={S.placeholderIcon}>🌙</div>
@@ -571,7 +580,7 @@ const featuredCard: Record<string, React.CSSProperties> = {
     position: "absolute",
     top: 14,
     right: 14,
-    zIndex: 3,
+    zIndex: 4,
     padding: "6px 12px",
     borderRadius: 999,
     fontSize: 11,
@@ -599,14 +608,37 @@ const featuredCard: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    isolation: "isolate",
+  },
+
+  imageBg: {
+    position: "absolute",
+    inset: 0,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    filter: "blur(22px) brightness(0.42)",
+    transform: "scale(1.18)",
+    zIndex: 0,
+  },
+
+  imageOverlay: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "linear-gradient(180deg, rgba(8,10,16,0.20) 0%, rgba(8,10,16,0.42) 100%)",
+    zIndex: 1,
   },
 
   image: {
-    width: "100%",
-    height: "100%",
+    position: "relative",
+    zIndex: 2,
+    maxWidth: "100%",
+    maxHeight: "100%",
+    width: "auto",
+    height: "auto",
     objectFit: "contain",
     display: "block",
-    backgroundColor: "transparent",
+    filter: "drop-shadow(0 10px 26px rgba(0,0,0,0.35))",
   },
 
   placeholder: {
@@ -815,10 +847,6 @@ const gridCard: Record<string, React.CSSProperties> = {
     borderRadius: 22,
   },
 
-  featureBadge: {
-    ...featuredCard.featureBadge,
-  },
-
   imageFrame: {
     padding: 12,
     paddingBottom: 8,
@@ -828,6 +856,11 @@ const gridCard: Record<string, React.CSSProperties> = {
     ...featuredCard.imageBox,
     height: 240,
     borderRadius: 18,
+  },
+
+  imageBg: {
+    ...featuredCard.imageBg,
+    filter: "blur(18px) brightness(0.42)",
   },
 
   body: {
