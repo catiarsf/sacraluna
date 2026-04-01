@@ -8,6 +8,8 @@ type Consultor = {
   nome: string;
   email?: string;
   preco_por_min: number;
+  preco_chat?: number;
+  preco_voz?: number;
   foto_url: string | null;
   especialidades: string | null;
   apresentacao: string | null;
@@ -15,6 +17,7 @@ type Consultor = {
   destaque?: number;
   online?: number;
   ocupado?: number;
+  voip_ativo?: number;
 };
 
 function normalizeFotoUrl(url: string | null) {
@@ -28,6 +31,18 @@ function normalizeFotoUrl(url: string | null) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getPrecoChat(c: any): number {
+  const raw = c?.preco_chat ?? c?.preco_por_min ?? 0;
+  const n = Number.parseFloat(String(raw ?? "0").replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getPrecoVoz(c: any): number {
+  const raw = c?.preco_voz ?? c?.preco_por_min ?? 0;
+  const n = Number.parseFloat(String(raw ?? "0").replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
 }
 
 export default function ConsultorPerfilPage() {
@@ -62,7 +77,8 @@ export default function ConsultorPerfilPage() {
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || `Erro (${res.status})`);
-        return data as Consultor;
+
+        return (data?.consultor ?? data) as Consultor;
       })
       .then((c) => setConsultor(c))
       .catch((e) => setErr(e?.message || "Erro ao carregar consultor"))
@@ -76,12 +92,29 @@ export default function ConsultorPerfilPage() {
     return (t || "").trim();
   }, [consultor]);
 
+  const ativo = Number(consultor?.ativo ?? 0) === 1;
+  const online = Number(consultor?.online ?? 0) === 1;
+  const ocupado = Number(consultor?.ocupado ?? 0) === 1;
+  const voipAtivo = Number(consultor?.voip_ativo ?? 1) === 1;
+
+  const statusText = !ativo
+    ? "Indisponível"
+    : !online
+    ? "Offline"
+    : ocupado
+    ? "Ocupado"
+    : "Disponível";
+
+  const statusColor = !ativo
+    ? "#ff7b7b"
+    : !online
+    ? "#c7c7c7"
+    : ocupado
+    ? "#ffd36b"
+    : "#88ffbc";
+
   async function iniciarPedidoChat() {
     if (!consultor) return;
-
-    const ativo = Number(consultor.ativo ?? 0) === 1;
-    const online = Number(consultor.online ?? 0) === 1;
-    const ocupado = Number(consultor.ocupado ?? 0) === 1;
 
     if (!ativo || !online || ocupado) {
       alert("Este consultor não está disponível neste momento.");
@@ -177,9 +210,10 @@ export default function ConsultorPerfilPage() {
   async function iniciarChamadaVoz() {
     if (!consultor) return;
 
-    const ativo = Number(consultor.ativo ?? 0) === 1;
-    const online = Number(consultor.online ?? 0) === 1;
-    const ocupado = Number(consultor.ocupado ?? 0) === 1;
+    if (!voipAtivo) {
+      alert("As chamadas por voz estão desligadas para este consultor.");
+      return;
+    }
 
     if (!ativo || !online || ocupado) {
       alert("Este consultor não está disponível neste momento.");
@@ -228,46 +262,68 @@ export default function ConsultorPerfilPage() {
 
         {!loading && !err && consultor && (
           <div style={styles.card}>
+            {Number(consultor.destaque ?? 0) === 1 ? (
+              <div style={styles.featureBadge}>★ Consultora em destaque</div>
+            ) : null}
+
             <div style={styles.left}>
-              <div style={styles.imageBox}>
-                {foto ? (
-                  <img src={foto} alt={consultor.nome} style={styles.image} />
-                ) : (
-                  <div style={styles.placeholder}>🌙 Sem foto</div>
-                )}
+              <div style={styles.imageFrame}>
+                <div style={styles.imageBox}>
+                  {foto ? (
+                    <img src={foto} alt={consultor.nome} style={styles.image} />
+                  ) : (
+                    <div style={styles.placeholder}>🌙 Sem foto</div>
+                  )}
+                </div>
               </div>
             </div>
 
             <div style={styles.right}>
-              <h2 style={styles.name}>{consultor.nome}</h2>
+              <div style={styles.topHeader}>
+                <h2 style={styles.name}>{consultor.nome}</h2>
 
-              <div
-                style={{
-                  ...styles.status,
-                  color:
-                    Number(consultor.ativo ?? 0) !== 1
-                      ? "#ff7b7b"
-                      : Number(consultor.online ?? 0) !== 1
-                      ? "#c7c7c7"
-                      : Number(consultor.ocupado ?? 0) === 1
-                      ? "#ffd36b"
-                      : "#7dffb1",
-                }}
-              >
-                {Number(consultor.ativo ?? 0) !== 1
-                  ? "Indisponível"
-                  : Number(consultor.online ?? 0) !== 1
-                  ? "Offline"
-                  : Number(consultor.ocupado ?? 0) === 1
-                  ? "Ocupado"
-                  : "Disponível"}
+                <div style={{ ...styles.status, color: statusColor }}>
+                  {statusText}
+                </div>
               </div>
 
-              <div style={styles.priceRow}>
-                <span style={styles.priceValue}>
-                  {Number(consultor.preco_por_min ?? 0).toFixed(2)}€
-                </span>
-                <span style={styles.priceUnit}>/min</span>
+              <div style={styles.pricesWrap}>
+                <div style={styles.priceCard}>
+                  <div style={styles.priceLabel}>CHAT</div>
+                  <div style={styles.priceRow}>
+                    <span style={styles.priceValue}>
+                      {getPrecoChat(consultor).toFixed(2)}€
+                    </span>
+                    <span style={styles.priceUnit}>/min</span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    ...styles.priceCard,
+                    ...(voipAtivo ? null : styles.priceCardDisabled),
+                  }}
+                >
+                  <div
+                    style={{
+                      ...styles.priceLabel,
+                      ...(voipAtivo ? null : styles.priceLabelDisabled),
+                    }}
+                  >
+                    VOZ
+                  </div>
+
+                  {voipAtivo ? (
+                    <div style={styles.priceRow}>
+                      <span style={styles.priceValue}>
+                        {getPrecoVoz(consultor).toFixed(2)}€
+                      </span>
+                      <span style={styles.priceUnit}>/min</span>
+                    </div>
+                  ) : (
+                    <div style={styles.voipOffText}>Indisponível</div>
+                  )}
+                </div>
               </div>
 
               {consultor.especialidades ? (
@@ -287,7 +343,11 @@ export default function ConsultorPerfilPage() {
                   {creatingChat ? "AGUARDA..." : "Iniciar Chat"}
                 </button>
 
-                <button style={styles.btnBlue} onClick={iniciarChamadaVoz}>
+                <button
+                  style={voipAtivo ? styles.btnBlue : styles.btnBlueDisabled}
+                  onClick={iniciarChamadaVoz}
+                  disabled={!voipAtivo}
+                >
                   Chamada de Voz
                 </button>
               </div>
@@ -311,103 +371,287 @@ export default function ConsultorPerfilPage() {
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    padding: "26px 18px 60px",
+    padding: "28px 18px 64px",
     color: "#fff",
-    background:
-      "radial-gradient(1100px 650px at 50% 75%, rgba(25,70,140,0.55) 0%, rgba(10,16,28,1) 55%)",
+    backgroundImage: "url('/fundo.jpg')",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
   },
-  wrap: { maxWidth: 1100, margin: "0 auto" },
+
+  wrap: {
+    maxWidth: 1180,
+    margin: "0 auto",
+  },
+
   backBtn: {
-    borderRadius: 12,
+    borderRadius: 14,
     border: "1px solid rgba(212,175,55,0.55)",
-    background: "rgba(0,0,0,0.20)",
+    background: "rgba(0,0,0,0.24)",
     color: "#f4d78b",
-    padding: "10px 12px",
+    padding: "10px 14px",
     fontWeight: 900,
     cursor: "pointer",
-    marginBottom: 14,
+    marginBottom: 18,
+    boxShadow: "0 10px 22px rgba(0,0,0,0.18)",
   },
+
   errBox: {
     border: "1px solid rgba(255,180,180,0.5)",
-    background: "rgba(0,0,0,0.25)",
-    borderRadius: 14,
-    padding: 16,
-  },
-  errTitle: { fontWeight: 900, fontSize: 18, marginBottom: 6 },
-  errText: { opacity: 0.9 },
-  card: {
-    display: "grid",
-    gridTemplateColumns: "320px 1fr",
-    gap: 16,
-    borderRadius: 18,
-    overflow: "hidden",
-    border: "1px solid rgba(212,175,55,0.40)",
-    background: "rgba(0,0,0,0.16)",
-    boxShadow: "0 12px 34px rgba(0,0,0,0.55)",
-  },
-  left: { padding: 16 },
-  right: { padding: 16 },
-  imageBox: {
-    height: 260,
+    background: "rgba(0,0,0,0.30)",
     borderRadius: 16,
-    overflow: "hidden",
-    border: "1px solid rgba(212,175,55,0.25)",
-    background: "rgba(0,0,0,0.20)",
+    padding: 18,
   },
+
+  errTitle: {
+    fontWeight: 900,
+    fontSize: 18,
+    marginBottom: 6,
+  },
+
+  errText: {
+    opacity: 0.9,
+  },
+
+  card: {
+    position: "relative",
+    display: "grid",
+    gridTemplateColumns: "360px 1fr",
+    gap: 20,
+    borderRadius: 24,
+    overflow: "hidden",
+    border: "1px solid rgba(212,175,55,0.34)",
+    background:
+      "linear-gradient(180deg, rgba(12,18,32,0.96) 0%, rgba(18,26,45,0.94) 100%)",
+    boxShadow:
+      "0 18px 45px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.04)",
+    backdropFilter: "blur(10px)",
+  },
+
+  featureBadge: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    zIndex: 3,
+    padding: "7px 14px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.7,
+    color: "#111",
+    background:
+      "linear-gradient(180deg, rgba(255,223,130,1) 0%, rgba(212,175,55,1) 100%)",
+    boxShadow: "0 8px 18px rgba(0,0,0,0.24)",
+  },
+
+  left: {
+    padding: 18,
+  },
+
+  right: {
+    padding: "22px 22px 22px 0",
+  },
+
+  imageFrame: {
+    padding: 0,
+  },
+
+  imageBox: {
+    height: 380,
+    borderRadius: 22,
+    overflow: "hidden",
+    border: "1px solid rgba(255,255,255,0.08)",
+    background:
+      "radial-gradient(circle at center, rgba(30,43,73,0.95) 0%, rgba(10,14,24,1) 100%)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+  },
+
   image: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
+    objectFit: "contain",
     display: "block",
+    backgroundColor: "transparent",
   },
+
   placeholder: {
     height: "100%",
+    width: "100%",
     display: "grid",
     placeItems: "center",
     opacity: 0.85,
   },
-  name: { margin: 0, fontSize: 26, fontWeight: 950 },
-  status: { marginTop: 6, fontSize: 13, fontWeight: 900 },
-  priceRow: { marginTop: 10, display: "flex", alignItems: "baseline", gap: 8 },
-  priceValue: { fontSize: 24, fontWeight: 950, color: "#f4d78b" },
-  priceUnit: { fontSize: 13, opacity: 0.8 },
-  spec: { marginTop: 10, opacity: 0.9 },
-  waitingBox: {
-    marginTop: 14,
-    padding: "12px 14px",
-    borderRadius: 12,
-    background: "rgba(212,175,55,0.10)",
-    border: "1px solid rgba(212,175,55,0.35)",
-    color: "#f4d78b",
-    fontWeight: 700,
+
+  topHeader: {
+    marginTop: 8,
   },
-  btns: {
-    marginTop: 14,
+
+  name: {
+    margin: 0,
+    fontSize: 40,
+    lineHeight: 1.05,
+    fontWeight: 950,
+    color: "#fffaf0",
+    textShadow: "0 3px 10px rgba(0,0,0,0.35)",
+  },
+
+  status: {
+    marginTop: 10,
+    fontSize: 14,
+    fontWeight: 900,
+    letterSpacing: 0.3,
+  },
+
+  pricesWrap: {
+    marginTop: 16,
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    gap: 10,
+    gap: 12,
+    maxWidth: 420,
   },
+
+  priceCard: {
+    border: "1px solid rgba(255,255,255,0.10)",
+    borderRadius: 16,
+    padding: "12px 14px",
+    background: "rgba(255,255,255,0.04)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+  },
+
+  priceCardDisabled: {
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.02)",
+    opacity: 0.72,
+  },
+
+  priceLabel: {
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 1,
+    color: "#f4d78b",
+    opacity: 0.95,
+    marginBottom: 6,
+  },
+
+  priceLabelDisabled: {
+    color: "#c7c7c7",
+  },
+
+  priceRow: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: 6,
+  },
+
+  priceValue: {
+    fontSize: 32,
+    fontWeight: 950,
+    color: "#fff3c2",
+    lineHeight: 1,
+  },
+
+  priceUnit: {
+    fontSize: 13,
+    opacity: 0.82,
+    fontWeight: 700,
+  },
+
+  voipOffText: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#c7c7c7",
+    marginTop: 8,
+  },
+
+  spec: {
+    marginTop: 16,
+    fontSize: 19,
+    lineHeight: 1.45,
+    fontWeight: 700,
+    color: "rgba(255,255,255,0.95)",
+  },
+
+  waitingBox: {
+    marginTop: 16,
+    padding: "12px 14px",
+    borderRadius: 14,
+    background: "rgba(26,63,130,0.35)",
+    border: "1px solid rgba(140,180,255,0.25)",
+    color: "#dce8ff",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+
+  btns: {
+    marginTop: 18,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+
   btnGold: {
-    padding: "11px 10px",
-    borderRadius: 12,
-    border: "1px solid rgba(212,175,55,0.95)",
+    padding: "14px 14px",
+    borderRadius: 16,
+    border: "1px solid rgba(212,175,55,0.98)",
     background:
-      "linear-gradient(180deg, rgba(212,175,55,0.98) 0%, rgba(180,140,35,0.98) 100%)",
+      "linear-gradient(180deg, rgba(255,227,148,1) 0%, rgba(212,175,55,0.98) 100%)",
     color: "#111",
     fontWeight: 950,
+    fontSize: 14,
+    letterSpacing: 0.4,
     cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(0,0,0,0.22)",
   },
+
   btnBlue: {
-    padding: "11px 10px",
-    borderRadius: 12,
-    border: "1px solid rgba(212,175,55,0.55)",
+    padding: "14px 14px",
+    borderRadius: 16,
+    border: "1px solid rgba(95,170,255,0.62)",
     background:
-      "linear-gradient(180deg, rgba(26,63,130,0.55) 0%, rgba(7,10,16,0.25) 100%)",
-    color: "#f4d78b",
+      "linear-gradient(180deg, rgba(44,99,184,0.95) 0%, rgba(28,63,130,0.92) 100%)",
+    color: "#eef6ff",
     fontWeight: 950,
+    fontSize: 14,
+    letterSpacing: 0.4,
     cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(0,0,0,0.22)",
   },
-  sep: { margin: "18px 0", height: 1, background: "rgba(255,255,255,0.08)" },
-  h3: { margin: 0, fontSize: 18, fontWeight: 900, color: "#f4d78b" },
-  p: { marginTop: 10, lineHeight: 1.5, opacity: 0.95, whiteSpace: "pre-wrap" },
+
+  btnBlueDisabled: {
+    padding: "14px 14px",
+    borderRadius: 16,
+    border: "1px solid rgba(170,170,170,0.18)",
+    background: "rgba(90,90,90,0.20)",
+    color: "#c7c7c7",
+    fontWeight: 950,
+    fontSize: 14,
+    letterSpacing: 0.4,
+    cursor: "not-allowed",
+    opacity: 0.78,
+  },
+
+  sep: {
+    margin: "22px 0 18px",
+    height: 1,
+    background: "linear-gradient(90deg, rgba(212,175,55,0.22), rgba(255,255,255,0.04))",
+  },
+
+  h3: {
+    margin: 0,
+    fontSize: 21,
+    fontWeight: 900,
+    color: "#f4d78b",
+  },
+
+  p: {
+    marginTop: 12,
+    lineHeight: 1.72,
+    opacity: 0.96,
+    whiteSpace: "pre-wrap",
+    fontSize: 17,
+    color: "rgba(255,255,255,0.92)",
+  },
 };

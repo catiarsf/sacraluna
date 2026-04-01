@@ -237,12 +237,12 @@ function ConsultorCard({
     : "Disponível";
 
   const statusColor = !ativo
-    ? "#ff6b6b"
+    ? "#ff7b7b"
     : !online
     ? "#c7c7c7"
     : ocupado
     ? "#ffd36b"
-    : "#7dffb1";
+    : "#88ffbc";
 
   const podeLigar = ativo && online && !ocupado && voipAtivo;
 
@@ -389,21 +389,26 @@ function ConsultorCard({
         if (e.key === "Enter" || e.key === " ") router.push(hrefPerfil);
       }}
     >
-      <div style={S.imageBox}>
-        {foto ? (
-          <img src={foto} alt={c.nome} style={S.image} />
-        ) : (
-          <div style={S.placeholder}>
-            <div style={S.placeholderIcon}>🌙</div>
-            <div style={S.placeholderText}>Sem foto</div>
-          </div>
-        )}
+      {isFeatured && <div style={S.featureBadge}>★ Destaque</div>}
+
+      <div style={S.imageFrame}>
+        <div style={S.imageBox}>
+          {foto ? (
+            <img src={foto} alt={c.nome} style={S.image} />
+          ) : (
+            <div style={S.placeholder}>
+              <div style={S.placeholderIcon}>🌙</div>
+              <div style={S.placeholderText}>Sem foto</div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={S.body}>
-        <div style={S.name}>{c.nome}</div>
-
-        <div style={{ ...S.status, color: statusColor }}>{statusText}</div>
+        <div style={S.topBlock}>
+          <div style={S.name}>{c.nome}</div>
+          <div style={{ ...S.status, color: statusColor }}>{statusText}</div>
+        </div>
 
         <div style={S.priceWrap}>
           <div style={S.priceBlock}>
@@ -443,7 +448,7 @@ function ConsultorCard({
           {c.especialidades ? (
             <div style={S.spec}>{c.especialidades}</div>
           ) : (
-            <div style={S.spec}> </div>
+            <div style={S.spec}>Sem especialidades indicadas.</div>
           )}
         </div>
 
@@ -498,21 +503,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   section: {
-    maxWidth: 1180,
+    maxWidth: 1240,
     margin: "0 auto",
-    padding: "14px 6px",
+    padding: "16px 8px",
   },
 
   testemunhosSection: {
-    maxWidth: 1180,
-    margin: "10px auto 0",
-    padding: "10px 6px 20px",
+    maxWidth: 1240,
+    margin: "14px auto 0",
+    padding: "10px 8px 24px",
   },
 
   sectionTitle: {
-    margin: "6px 0 18px",
+    margin: "8px 0 22px",
     textAlign: "center",
-    fontSize: "clamp(30px, 4vw, 40px)",
+    fontSize: "clamp(30px, 4vw, 42px)",
     lineHeight: 1.1,
     fontWeight: 950,
     letterSpacing: 0.4,
@@ -523,17 +528,17 @@ const styles: Record<string, React.CSSProperties> = {
 
   featureGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 320px))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 360px))",
     justifyContent: "center",
-    gap: 18,
+    gap: 26,
     alignItems: "start",
   },
 
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(235px, 250px))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 280px))",
     justifyContent: "center",
-    gap: 18,
+    gap: 22,
     alignItems: "start",
   },
 
@@ -546,30 +551,62 @@ const styles: Record<string, React.CSSProperties> = {
 
 const featuredCard: Record<string, React.CSSProperties> = {
   card: {
+    position: "relative",
     width: "100%",
-    minHeight: 490,
-    borderRadius: 18,
+    minHeight: 590,
+    borderRadius: 24,
     overflow: "hidden",
-    border: "1px solid rgba(212,175,55,0.65)",
-    background: "rgba(0,0,0,0.18)",
+    border: "1px solid rgba(212,175,55,0.42)",
+    background:
+      "linear-gradient(180deg, rgba(12,18,32,0.96) 0%, rgba(18,26,45,0.94) 100%)",
     cursor: "pointer",
-    boxShadow: "0 18px 40px rgba(0,0,0,0.35)",
+    boxShadow:
+      "0 18px 45px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04)",
     display: "flex",
     flexDirection: "column",
+    backdropFilter: "blur(10px)",
+  },
+
+  featureBadge: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    zIndex: 3,
+    padding: "6px 12px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0.7,
+    color: "#111",
+    background:
+      "linear-gradient(180deg, rgba(255,223,130,1) 0%, rgba(212,175,55,1) 100%)",
+    boxShadow: "0 8px 18px rgba(0,0,0,0.24)",
+  },
+
+  imageFrame: {
+    padding: 14,
+    paddingBottom: 8,
   },
 
   imageBox: {
     position: "relative",
-    height: 220,
-    background: "rgba(0,0,0,0.25)",
-    flexShrink: 0,
+    height: 300,
+    borderRadius: 20,
+    overflow: "hidden",
+    background:
+      "radial-gradient(circle at center, rgba(30,43,73,0.95) 0%, rgba(10,14,24,1) 100%)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   image: {
     width: "100%",
     height: "100%",
-    objectFit: "cover",
+    objectFit: "contain",
     display: "block",
+    backgroundColor: "transparent",
   },
 
   placeholder: {
@@ -591,40 +628,45 @@ const featuredCard: Record<string, React.CSSProperties> = {
   },
 
   body: {
-    padding: 14,
+    padding: "8px 16px 18px",
     display: "flex",
     flexDirection: "column",
     flex: 1,
   },
 
+  topBlock: {
+    marginBottom: 10,
+  },
+
   name: {
-    fontSize: 20,
-    fontWeight: 900,
-    minHeight: 48,
-    display: "flex",
-    alignItems: "center",
+    fontSize: 28,
+    fontWeight: 950,
+    lineHeight: 1.05,
+    color: "#fffaf0",
+    textShadow: "0 3px 10px rgba(0,0,0,0.35)",
   },
 
   status: {
-    marginTop: 4,
-    fontSize: 13,
+    marginTop: 8,
+    fontSize: 14,
     fontWeight: 900,
-    minHeight: 20,
+    letterSpacing: 0.3,
   },
 
   priceWrap: {
     marginTop: 10,
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    gap: 10,
-    minHeight: 62,
+    gap: 12,
+    minHeight: 80,
   },
 
   priceBlock: {
     border: "1px solid rgba(255,255,255,0.10)",
-    borderRadius: 12,
-    padding: "8px 10px",
+    borderRadius: 16,
+    padding: "10px 12px",
     background: "rgba(255,255,255,0.04)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
   },
 
   priceBlockDisabled: {
@@ -636,10 +678,10 @@ const featuredCard: Record<string, React.CSSProperties> = {
   priceLabel: {
     fontSize: 11,
     fontWeight: 900,
-    letterSpacing: 0.8,
+    letterSpacing: 1,
     color: "#f4d78b",
     opacity: 0.95,
-    marginBottom: 4,
+    marginBottom: 6,
   },
 
   priceLabelDisabled: {
@@ -653,14 +695,16 @@ const featuredCard: Record<string, React.CSSProperties> = {
   },
 
   priceValue: {
-    fontSize: 20,
-    fontWeight: 900,
-    color: "#f4d78b",
+    fontSize: 30,
+    fontWeight: 950,
+    color: "#fff3c2",
+    lineHeight: 1,
   },
 
   priceUnit: {
-    fontSize: 12,
-    opacity: 0.8,
+    fontSize: 13,
+    opacity: 0.82,
+    fontWeight: 700,
   },
 
   voipOffText: {
@@ -671,14 +715,15 @@ const featuredCard: Record<string, React.CSSProperties> = {
   },
 
   specWrap: {
-    marginTop: 10,
-    minHeight: 54,
+    marginTop: 14,
+    minHeight: 68,
   },
 
   spec: {
-    fontSize: 13,
-    opacity: 0.85,
-    lineHeight: 1.35,
+    fontSize: 14,
+    opacity: 0.9,
+    lineHeight: 1.48,
+    color: "rgba(255,255,255,0.92)",
     display: "-webkit-box",
     WebkitLineClamp: 3,
     WebkitBoxOrient: "vertical" as any,
@@ -686,9 +731,9 @@ const featuredCard: Record<string, React.CSSProperties> = {
   },
 
   waitingBox: {
-    marginTop: 10,
-    padding: "8px 10px",
-    borderRadius: 10,
+    marginTop: 12,
+    padding: "9px 12px",
+    borderRadius: 12,
     background: "rgba(26,63,130,0.35)",
     border: "1px solid rgba(140,180,255,0.25)",
     color: "#dce8ff",
@@ -702,48 +747,62 @@ const featuredCard: Record<string, React.CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "1fr 1fr 1fr",
     gap: 10,
-    paddingTop: 14,
+    paddingTop: 16,
   },
 
   btnGold: {
-    padding: "10px 10px",
-    borderRadius: 12,
-    border: "1px solid rgba(212,175,55,0.95)",
-    background: "rgba(212,175,55,0.95)",
+    padding: "12px 10px",
+    borderRadius: 14,
+    border: "1px solid rgba(212,175,55,0.98)",
+    background:
+      "linear-gradient(180deg, rgba(255,227,148,1) 0%, rgba(212,175,55,0.98) 100%)",
     color: "#111",
     fontWeight: 950,
+    fontSize: 13,
+    letterSpacing: 0.4,
     cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(0,0,0,0.22)",
   },
 
   btnBlue: {
-    padding: "10px 10px",
-    borderRadius: 12,
-    border: "1px solid rgba(212,175,55,0.55)",
-    background: "rgba(26,63,130,0.55)",
-    color: "#f4d78b",
+    padding: "12px 10px",
+    borderRadius: 14,
+    border: "1px solid rgba(95,170,255,0.62)",
+    background:
+      "linear-gradient(180deg, rgba(44,99,184,0.95) 0%, rgba(28,63,130,0.92) 100%)",
+    color: "#eef6ff",
     fontWeight: 950,
+    fontSize: 13,
+    letterSpacing: 0.4,
     cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(0,0,0,0.22)",
   },
 
   btnBlueDisabled: {
-    padding: "10px 10px",
-    borderRadius: 12,
-    border: "1px solid rgba(170,170,170,0.20)",
-    background: "rgba(90,90,90,0.22)",
+    padding: "12px 10px",
+    borderRadius: 14,
+    border: "1px solid rgba(170,170,170,0.18)",
+    background: "rgba(90,90,90,0.20)",
     color: "#c7c7c7",
     fontWeight: 950,
+    fontSize: 13,
+    letterSpacing: 0.4,
     cursor: "not-allowed",
     opacity: 0.78,
   },
 
   btnPurple: {
-    padding: "10px 10px",
-    borderRadius: 12,
-    border: "1px solid rgba(200,140,255,0.55)",
-    background: "rgba(120,70,180,0.55)",
+    padding: "12px 10px",
+    borderRadius: 14,
+    border: "1px solid rgba(200,140,255,0.50)",
+    background:
+      "linear-gradient(180deg, rgba(142,94,201,0.94) 0%, rgba(108,67,168,0.92) 100%)",
     color: "#fff",
     fontWeight: 950,
+    fontSize: 13,
+    letterSpacing: 0.4,
     cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(0,0,0,0.22)",
   },
 };
 
@@ -752,44 +811,98 @@ const gridCard: Record<string, React.CSSProperties> = {
 
   card: {
     ...featuredCard.card,
-    minHeight: 430,
-    borderRadius: 16,
+    minHeight: 520,
+    borderRadius: 22,
+  },
+
+  featureBadge: {
+    ...featuredCard.featureBadge,
+  },
+
+  imageFrame: {
+    padding: 12,
+    paddingBottom: 8,
   },
 
   imageBox: {
     ...featuredCard.imageBox,
-    height: 180,
+    height: 240,
+    borderRadius: 18,
+  },
+
+  body: {
+    ...featuredCard.body,
+    padding: "8px 14px 16px",
   },
 
   name: {
     ...featuredCard.name,
-    fontSize: 17,
-    minHeight: 42,
+    fontSize: 22,
+  },
+
+  status: {
+    ...featuredCard.status,
+    fontSize: 13,
   },
 
   priceWrap: {
     ...featuredCard.priceWrap,
-    gap: 8,
-    minHeight: 58,
+    gap: 10,
+    minHeight: 72,
   },
 
   priceBlock: {
     ...featuredCard.priceBlock,
-    padding: "7px 8px",
+    padding: "9px 10px",
+    borderRadius: 14,
   },
 
   priceValue: {
     ...featuredCard.priceValue,
-    fontSize: 16,
+    fontSize: 24,
   },
 
   priceUnit: {
     ...featuredCard.priceUnit,
-    fontSize: 11,
+    fontSize: 12,
   },
 
   specWrap: {
     ...featuredCard.specWrap,
-    minHeight: 56,
+    minHeight: 60,
+  },
+
+  spec: {
+    ...featuredCard.spec,
+    fontSize: 13,
+  },
+
+  btns: {
+    ...featuredCard.btns,
+    gap: 8,
+  },
+
+  btnGold: {
+    ...featuredCard.btnGold,
+    fontSize: 12,
+    padding: "11px 8px",
+  },
+
+  btnBlue: {
+    ...featuredCard.btnBlue,
+    fontSize: 12,
+    padding: "11px 8px",
+  },
+
+  btnBlueDisabled: {
+    ...featuredCard.btnBlueDisabled,
+    fontSize: 12,
+    padding: "11px 8px",
+  },
+
+  btnPurple: {
+    ...featuredCard.btnPurple,
+    fontSize: 12,
+    padding: "11px 8px",
   },
 };
