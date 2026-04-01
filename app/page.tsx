@@ -231,18 +231,18 @@ function ConsultorCard({
   const statusText = !ativo
     ? "Indisponível"
     : !online
-    ? "Offline"
-    : ocupado
-    ? "Ocupado"
-    : "Disponível";
+      ? "Offline"
+      : ocupado
+        ? "Ocupado"
+        : "Disponível";
 
   const statusColor = !ativo
     ? "#ff7b7b"
     : !online
-    ? "#c7c7c7"
-    : ocupado
-    ? "#ffd36b"
-    : "#88ffbc";
+      ? "#c7c7c7"
+      : ocupado
+        ? "#ffd36b"
+        : "#88ffbc";
 
   const podeLigar = ativo && online && !ocupado && voipAtivo;
 
@@ -393,17 +393,10 @@ function ConsultorCard({
 
       <div style={S.imageFrame}>
         <div style={S.imageBox}>
+          <div style={S.imageStarBg} />
+          <div style={S.imageGlow} />
           {foto ? (
-            <>
-              <div
-                style={{
-                  ...S.imageBg,
-                  backgroundImage: `url(${foto})`,
-                }}
-              />
-              <div style={S.imageOverlay} />
-              <img src={foto} alt={c.nome} style={S.image} />
-            </>
+            <img src={foto} alt={c.nome} style={S.image} />
           ) : (
             <div style={S.placeholder}>
               <div style={S.placeholderIcon}>🌙</div>
@@ -602,30 +595,31 @@ const featuredCard: Record<string, React.CSSProperties> = {
     height: 300,
     borderRadius: 20,
     overflow: "hidden",
-    background:
-      "radial-gradient(circle at center, rgba(30,43,73,0.95) 0%, rgba(10,14,24,1) 100%)",
     border: "1px solid rgba(255,255,255,0.08)",
+    background:
+      "radial-gradient(circle at center, rgba(24,32,54,0.96) 0%, rgba(9,12,20,1) 100%)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     isolation: "isolate",
   },
 
-  imageBg: {
+  imageStarBg: {
     position: "absolute",
     inset: 0,
+    backgroundImage: "url('/fundo.jpg')",
     backgroundSize: "cover",
     backgroundPosition: "center",
-    filter: "blur(22px) brightness(0.42)",
-    transform: "scale(1.18)",
+    opacity: 0.55,
     zIndex: 0,
+    transform: "scale(1.08)",
   },
 
-  imageOverlay: {
+  imageGlow: {
     position: "absolute",
     inset: 0,
     background:
-      "linear-gradient(180deg, rgba(8,10,16,0.20) 0%, rgba(8,10,16,0.42) 100%)",
+      "radial-gradient(circle at 50% 40%, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.04) 28%, rgba(0,0,0,0) 65%)",
     zIndex: 1,
   },
 
@@ -638,7 +632,7 @@ const featuredCard: Record<string, React.CSSProperties> = {
     height: "auto",
     objectFit: "contain",
     display: "block",
-    filter: "drop-shadow(0 10px 26px rgba(0,0,0,0.35))",
+    filter: "drop-shadow(0 10px 26px rgba(0,0,0,0.38))",
   },
 
   placeholder: {
@@ -647,6 +641,7 @@ const featuredCard: Record<string, React.CSSProperties> = {
     display: "grid",
     placeItems: "center",
     opacity: 0.9,
+    zIndex: 2,
   },
 
   placeholderIcon: {
@@ -856,11 +851,6 @@ const gridCard: Record<string, React.CSSProperties> = {
     ...featuredCard.imageBox,
     height: 240,
     borderRadius: 18,
-  },
-
-  imageBg: {
-    ...featuredCard.imageBg,
-    filter: "blur(18px) brightness(0.42)",
   },
 
   body: {

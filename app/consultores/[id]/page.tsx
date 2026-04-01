@@ -77,7 +77,6 @@ export default function ConsultorPerfilPage() {
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error || `Erro (${res.status})`);
-
         return (data?.consultor ?? data) as Consultor;
       })
       .then((c) => setConsultor(c))
@@ -100,18 +99,18 @@ export default function ConsultorPerfilPage() {
   const statusText = !ativo
     ? "Indisponível"
     : !online
-    ? "Offline"
-    : ocupado
-    ? "Ocupado"
-    : "Disponível";
+      ? "Offline"
+      : ocupado
+        ? "Ocupado"
+        : "Disponível";
 
   const statusColor = !ativo
     ? "#ff7b7b"
     : !online
-    ? "#c7c7c7"
-    : ocupado
-    ? "#ffd36b"
-    : "#88ffbc";
+      ? "#c7c7c7"
+      : ocupado
+        ? "#ffd36b"
+        : "#88ffbc";
 
   async function iniciarPedidoChat() {
     if (!consultor) return;
@@ -269,17 +268,10 @@ export default function ConsultorPerfilPage() {
             <div style={styles.left}>
               <div style={styles.imageFrame}>
                 <div style={styles.imageBox}>
+                  <div style={styles.imageStarBg} />
+                  <div style={styles.imageGlow} />
                   {foto ? (
-                    <>
-                      <div
-                        style={{
-                          ...styles.imageBg,
-                          backgroundImage: `url(${foto})`,
-                        }}
-                      />
-                      <div style={styles.imageOverlay} />
-                      <img src={foto} alt={consultor.nome} style={styles.image} />
-                    </>
+                    <img src={foto} alt={consultor.nome} style={styles.image} />
                   ) : (
                     <div style={styles.placeholder}>🌙 Sem foto</div>
                   )}
@@ -472,28 +464,29 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     border: "1px solid rgba(255,255,255,0.08)",
     background:
-      "radial-gradient(circle at center, rgba(30,43,73,0.95) 0%, rgba(10,14,24,1) 100%)",
+      "radial-gradient(circle at center, rgba(24,32,54,0.96) 0%, rgba(9,12,20,1) 100%)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     isolation: "isolate",
   },
 
-  imageBg: {
+  imageStarBg: {
     position: "absolute",
     inset: 0,
+    backgroundImage: "url('/fundo.jpg')",
     backgroundSize: "cover",
     backgroundPosition: "center",
-    filter: "blur(26px) brightness(0.42)",
-    transform: "scale(1.18)",
+    opacity: 0.55,
     zIndex: 0,
+    transform: "scale(1.08)",
   },
 
-  imageOverlay: {
+  imageGlow: {
     position: "absolute",
     inset: 0,
     background:
-      "linear-gradient(180deg, rgba(8,10,16,0.18) 0%, rgba(8,10,16,0.42) 100%)",
+      "radial-gradient(circle at 50% 40%, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.04) 28%, rgba(0,0,0,0) 65%)",
     zIndex: 1,
   },
 
@@ -506,7 +499,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: "auto",
     objectFit: "contain",
     display: "block",
-    filter: "drop-shadow(0 10px 26px rgba(0,0,0,0.35))",
+    filter: "drop-shadow(0 10px 26px rgba(0,0,0,0.38))",
   },
 
   placeholder: {
@@ -515,6 +508,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     placeItems: "center",
     opacity: 0.85,
+    zIndex: 2,
   },
 
   topHeader: {
