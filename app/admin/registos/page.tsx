@@ -46,13 +46,25 @@ export default function AdminRegistosPage() {
 
   useEffect(() => {
     load();
+
+    const interval = setInterval(() => {
+      load();
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
   return (
     <main style={styles.page}>
       <div style={styles.wrap}>
         <div style={styles.top}>
-          <h1 style={styles.h1}>Registos de clientes</h1>
+          <div>
+            <h1 style={styles.h1}>Registos de clientes</h1>
+            <div style={styles.liveText}>
+              Atualização automática a cada 10 segundos
+            </div>
+          </div>
+
           <Link href="/admin" style={styles.backBtn}>
             ← Voltar à administração
           </Link>
@@ -124,6 +136,13 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 30,
     fontWeight: 900,
     color: "#f4d78b",
+  },
+
+  liveText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#88ffbc",
+    opacity: 0.9,
   },
 
   backBtn: {
