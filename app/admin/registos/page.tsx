@@ -9,6 +9,7 @@ type Cliente = {
   email: string;
   telefone: string | null;
   created_at: number;
+  saldo: number;
 };
 
 function formatDate(ts?: number) {
@@ -137,13 +138,19 @@ export default function AdminRegistosPage() {
                       <td style={styles.td}>{c.telefone || "-"}</td>
                       <td style={styles.td}>{formatDate(c.created_at)}</td>
                       <td style={styles.td}>
-                        <button
-                          type="button"
-                          style={styles.btnAdd}
-                          onClick={() => adicionarSaldo(c.id)}
-                        >
-                          + Saldo
-                        </button>
+                        <div style={styles.saldoBox}>
+                          <div style={styles.saldoValue}>
+                            {Number(c.saldo ?? 0).toFixed(2)}€
+                          </div>
+
+                          <button
+                            type="button"
+                            style={styles.btnAdd}
+                            onClick={() => adicionarSaldo(c.id)}
+                          >
+                            + Saldo
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -233,6 +240,18 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid rgba(255,255,255,0.08)",
     fontSize: 14,
     verticalAlign: "top",
+  },
+
+  saldoBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+
+  saldoValue: {
+    fontWeight: 900,
+    color: "#88ffbc",
+    fontSize: 14,
   },
 
   btnAdd: {
