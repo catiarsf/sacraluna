@@ -7,14 +7,18 @@ export async function GET() {
       .prepare(
         `
         SELECT
-          id,
-          nome,
-          email,
-          telefone,
-          created_at
-        FROM users
-        WHERE role = 'cliente'
-        ORDER BY created_at DESC
+          u.id,
+          u.nome,
+          u.email,
+          u.telefone,
+          u.created_at,
+          COALESCE(w.balance_eur, 0) AS saldo
+        FROM users u
+        LEFT JOIN wallets w
+          ON w.user_type = 'cliente'
+         AND w.user_id = u.id
+        WHERE u.role = 'cliente'
+        ORDER BY u.created_at DESC
         `
       )
       .all();

@@ -44,6 +44,43 @@ export default function AdminRegistosPage() {
     }
   }
 
+  async function adicionarSaldo(userId: number) {
+    const valor = prompt("Quanto queres adicionar? Exemplo: 10");
+
+    if (!valor) return;
+
+    const amount = Number(String(valor).replace(",", "."));
+
+    if (!amount || amount <= 0) {
+      alert("Valor inválido.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/admin/wallet-credit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          amount,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Erro ao adicionar saldo.");
+      }
+
+      alert("Saldo adicionado com sucesso.");
+      load();
+    } catch (e: any) {
+      alert(String(e?.message ?? e));
+    }
+  }
+
   useEffect(() => {
     load();
 
@@ -88,6 +125,7 @@ export default function AdminRegistosPage() {
                     <th style={styles.th}>Email</th>
                     <th style={styles.th}>Telefone</th>
                     <th style={styles.th}>Registado em</th>
+                    <th style={styles.th}>Saldo</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -98,6 +136,15 @@ export default function AdminRegistosPage() {
                       <td style={styles.td}>{c.email}</td>
                       <td style={styles.td}>{c.telefone || "-"}</td>
                       <td style={styles.td}>{formatDate(c.created_at)}</td>
+                      <td style={styles.td}>
+                        <button
+                          type="button"
+                          style={styles.btnAdd}
+                          onClick={() => adicionarSaldo(c.id)}
+                        >
+                          + Saldo
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -186,6 +233,17 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid rgba(255,255,255,0.08)",
     fontSize: 14,
     verticalAlign: "top",
+  },
+
+  btnAdd: {
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(212,175,55,0.6)",
+    background: "rgba(212,175,55,0.15)",
+    color: "#f4d78b",
+    fontWeight: 900,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
   },
 
   info: {
