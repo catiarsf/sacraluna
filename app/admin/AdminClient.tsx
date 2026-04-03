@@ -389,6 +389,11 @@ export default function AdminClient() {
           <div style={styles.quickTitle}>Consultores</div>
           <div style={styles.quickText}>Gerir consultores, destaque e disponibilidade</div>
         </Link>
+      
+      <Link href="/admin/registos" style={styles.quickCard}>
+  <div style={styles.quickTitle}>Registos</div>
+  <div style={styles.quickText}>Ver clientes registados no site</div>
+</Link>
 
         <Link href="/admin/loja" style={styles.quickCard}>
           <div style={styles.quickTitle}>Serviços</div>
