@@ -76,7 +76,6 @@ export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const billedMinutesRef = useRef(0);
   const endingRef = useRef(false);
-  const alertAudioRef = useRef<HTMLAudioElement | null>(null);
 
   function goBackToArea() {
     if (role === "consultor") {
@@ -109,21 +108,6 @@ export default function ChatPage() {
           session_id: sessionId,
         }),
       });
-    } catch {}
-  }
-
-  function tocarAlertaSeAtivado() {
-    try {
-      const ativo = localStorage.getItem("sacraluna_alertas_ativos");
-      if (ativo !== "1") return;
-
-      if (!alertAudioRef.current) {
-        alertAudioRef.current = new Audio("/alert.mp3");
-        alertAudioRef.current.volume = 1;
-      }
-
-      alertAudioRef.current.currentTime = 0;
-      alertAudioRef.current.play().catch(() => {});
     } catch {}
   }
 
@@ -332,10 +316,6 @@ export default function ChatPage() {
       };
 
       setMsgs((prev) => [...prev, msg]);
-
-      if (m.senderRole !== role) {
-        tocarAlertaSeAtivado();
-      }
     });
 
     socket.on("call_status", async (payload: any) => {
