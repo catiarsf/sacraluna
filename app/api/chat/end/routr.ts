@@ -6,13 +6,13 @@ import { getSession } from "@/lib/auth";
 export async function POST(req: Request) {
   try {
     const authSession = await getSession();
-    const user = authSession.user;
+    const user = authSession?.user ?? null;
 
     const cookieStore = await cookies();
     const consultorIdCookie = Number(cookieStore.get("consultor_id")?.value || 0);
 
     const body = await req.json().catch(() => ({}));
-    const sessionId = String(body?.session_id ?? "").trim();
+    const sessionId = String(body?.session_id ?? body?.sessionId ?? "").trim();
 
     if (!sessionId) {
       return NextResponse.json(
@@ -54,6 +54,17 @@ export async function POST(req: Request) {
         { ok: false, error: "Sem permissão." },
         { status: 403 }
       );
+    }
+
+    // Se já terminou, devolve OK na mesma para evitar erros duplicados
+    if (String(row.status) === "ended") {
+      return NextResponse.json({
+        ok: true,
+        session_id: sessionId,
+        status: "ended",
+        consultor_id: row.consultor_id,
+        already_ended: true,
+      });
     }
 
     const now = Math.floor(Date.now() / 1000);
