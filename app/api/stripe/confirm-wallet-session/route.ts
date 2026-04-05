@@ -24,6 +24,10 @@ function toNumber(v: any) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function ensureWallet(userType: string, userId: number) {
   const existing = db
     .prepare(
@@ -57,6 +61,22 @@ function ensureWallet(userType: string, userId: number) {
   return Number(created.lastInsertRowid);
 }
 
+function alreadyCredited(sessionId: string) {
+  const row = db
+    .prepare(
+      `
+      SELECT wt.id
+      FROM wallet_transactions wt
+      WHERE wt.session_id = ?
+        AND wt.type = 'credit'
+      LIMIT 1
+      `
+    )
+    .get(sessionId) as { id: number } | undefined;
+
+  return !!row;
+}
+
 export async function POST(req: Request) {
   try {
     const stripe = getStripe();
@@ -79,7 +99,36 @@ export async function POST(req: Request) {
       );
     }
 
-    const checkoutSession = await stripe.checkout.sessions.retrieve(sessionId);
+    // Se o webhook já creditou, devolve logo sucesso sem complicar
+    if (alreadyCredited(sessionId)) {
+      return NextResponse.json({
+        ok: true,
+        already_confirmed: true,
+        sessionId,
+      });
+    }
+
+    let checkoutSession: Stripe.Checkout.Session | null = null;
+
+    // Tenta durante alguns segundos para evitar o falso "pending"
+    for (let i = 0; i < 5; i++) {
+      checkoutSession = await stripe.checkout.sessions.retrieve(sessionId);
+
+      if (checkoutSession?.payment_status === "paid") {
+        break;
+      }
+
+      // Entretanto o webhook pode ter creditado
+      if (alreadyCredited(sessionId)) {
+        return NextResponse.json({
+          ok: true,
+          already_confirmed: true,
+          sessionId,
+        });
+      }
+
+      await sleep(1500);
+    }
 
     if (!checkoutSession) {
       return NextResponse.json(
@@ -132,6 +181,15 @@ export async function POST(req: Request) {
     }
 
     if (checkoutSession.payment_status !== "paid") {
+      // Última verificação: talvez o webhook tenha creditado enquanto esperávamos
+      if (alreadyCredited(sessionId)) {
+        return NextResponse.json({
+          ok: true,
+          already_confirmed: true,
+          sessionId,
+        });
+      }
+
       return NextResponse.json({
         ok: true,
         pending: true,
@@ -142,19 +200,7 @@ export async function POST(req: Request) {
 
     ensureWallet(userType, userId);
 
-    const alreadyCredited = db
-      .prepare(
-        `
-        SELECT wt.id
-        FROM wallet_transactions wt
-        WHERE wt.session_id = ?
-          AND wt.type = 'credit'
-        LIMIT 1
-        `
-      )
-      .get(sessionId) as { id: number } | undefined;
-
-    if (alreadyCredited) {
+    if (alreadyCredited(sessionId)) {
       return NextResponse.json({
         ok: true,
         already_confirmed: true,
