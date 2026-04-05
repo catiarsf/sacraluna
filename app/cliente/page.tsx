@@ -18,12 +18,17 @@ type ClienteData = {
   historico?: HistoricoItem[];
 };
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function ClientePage() {
   const router = useRouter();
   const [data, setData] = useState<ClienteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
   const [creditoLoading, setCreditoLoading] = useState(false);
+  const [confirmandoSaldo, setConfirmandoSaldo] = useState(false);
 
   async function atualizarSaldo() {
     try {
@@ -33,19 +38,24 @@ export default function ClientePage() {
 
       const json = await res.json().catch(() => null);
 
-      if (!res.ok) return;
+      if (!res.ok) return null;
 
-      setData((prev) => ({
+      const novoEstado = {
         ok: true,
-        id: Number(json?.cliente?.id ?? json?.id ?? prev?.id ?? 0),
-        saldo_eur: Number(json?.saldo_eur ?? prev?.saldo_eur ?? 0),
+        id: Number(json?.cliente?.id ?? json?.id ?? data?.id ?? 0),
+        saldo_eur: Number(json?.saldo_eur ?? data?.saldo_eur ?? 0),
         historico: Array.isArray(json?.historico)
           ? json.historico
-          : Array.isArray(prev?.historico)
-          ? prev!.historico
+          : Array.isArray(data?.historico)
+          ? data!.historico
           : [],
-      }));
-    } catch {}
+      };
+
+      setData(novoEstado);
+      return novoEstado;
+    } catch {
+      return null;
+    }
   }
 
   function limparParametrosStripeDaUrl() {
@@ -147,48 +157,67 @@ export default function ClientePage() {
         return;
       }
 
+      setConfirmandoSaldo(true);
+
       if (!checkoutSessionId) {
         await atualizarSaldo();
         limparParametrosStripeDaUrl();
+        setConfirmandoSaldo(false);
         return;
       }
 
       try {
-        const res = await fetch("/api/stripe/confirm-wallet-session", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            sessionId: checkoutSessionId,
-          }),
-        });
+        let confirmado = false;
 
-        const json = await res.json().catch(() => null);
+        for (let i = 0; i < 5; i++) {
+          const res = await fetch("/api/stripe/confirm-wallet-session", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              sessionId: checkoutSessionId,
+            }),
+          });
 
-        if (!res.ok || !json?.ok) {
-          alert(json?.error || "Erro ao confirmar pagamento.");
-          return;
-        }
+          const json = await res.json().catch(() => null);
 
-        if (json?.pending) {
+          if (!res.ok || !json?.ok) {
+            alert(json?.error || "Erro ao confirmar pagamento.");
+            limparParametrosStripeDaUrl();
+            setConfirmandoSaldo(false);
+            return;
+          }
+
           await atualizarSaldo();
-          alert(
-            "Pagamento recebido, mas ainda está a ser confirmado. Atualiza novamente dentro de instantes."
-          );
-          limparParametrosStripeDaUrl();
-          return;
+
+          if (json?.credited || json?.already_confirmed) {
+            confirmado = true;
+            break;
+          }
+
+          if (!json?.pending) {
+            break;
+          }
+
+          await sleep(2000);
         }
 
         await atualizarSaldo();
 
-        if (json?.credited || json?.already_confirmed) {
+        if (confirmado) {
           alert("Saldo atualizado com sucesso.");
+        } else {
+          alert(
+            "O pagamento foi recebido. Se o saldo ainda não apareceu, atualiza dentro de instantes."
+          );
         }
 
         limparParametrosStripeDaUrl();
       } catch {
         alert("Erro ao confirmar o pagamento.");
+      } finally {
+        setConfirmandoSaldo(false);
       }
     }
 
@@ -241,6 +270,10 @@ export default function ClientePage() {
         <h2 style={styles.h2}>Saldo / Créditos</h2>
         <p style={styles.saldo}>{saldo.toFixed(2)}€</p>
 
+        {confirmandoSaldo ? (
+          <p style={styles.infoText}>A confirmar pagamento e atualizar saldo...</p>
+        ) : null}
+
         <div style={styles.creditBox}>
           <h3 style={styles.h3}>Carregar saldo</h3>
 
@@ -248,7 +281,7 @@ export default function ClientePage() {
             <button
               onClick={() => comprarCreditos(5)}
               style={styles.buyButton}
-              disabled={creditoLoading}
+              disabled={creditoLoading || confirmandoSaldo}
             >
               {creditoLoading ? "A processar..." : "Comprar 5€"}
             </button>
@@ -256,7 +289,7 @@ export default function ClientePage() {
             <button
               onClick={() => comprarCreditos(10)}
               style={styles.buyButton}
-              disabled={creditoLoading}
+              disabled={creditoLoading || confirmandoSaldo}
             >
               {creditoLoading ? "A processar..." : "Comprar 10€"}
             </button>
@@ -264,7 +297,7 @@ export default function ClientePage() {
             <button
               onClick={() => comprarCreditos(20)}
               style={styles.buyButton}
-              disabled={creditoLoading}
+              disabled={creditoLoading || confirmandoSaldo}
             >
               {creditoLoading ? "A processar..." : "Comprar 20€"}
             </button>
@@ -346,6 +379,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 28,
     fontWeight: "bold",
     marginTop: 10,
+  },
+  infoText: {
+    marginTop: 10,
+    color: "#f4d78b",
+    fontWeight: 700,
   },
   creditBox: {
     marginTop: 18,
