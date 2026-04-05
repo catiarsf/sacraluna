@@ -50,6 +50,7 @@ export default function ConsultorPage() {
 
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastAlertedSessionRef = useRef<string>("");
+  const pendingChatInitializedRef = useRef(false);
   const lastPendingEmailsRef = useRef(0);
   const emailsInitializedRef = useRef(false);
 
@@ -106,13 +107,26 @@ export default function ConsultorPage() {
       const nextPending = json?.pending ?? null;
       setPendingChat(nextPending);
 
+      // Primeira leitura: inicializa sem tocar alerta
+      if (!pendingChatInitializedRef.current) {
+        pendingChatInitializedRef.current = true;
+        lastAlertedSessionRef.current = nextPending?.id ?? "";
+        return;
+      }
+
+      // Só toca quando entra um pedido novo depois da inicialização
       if (
         nextPending?.id &&
         nextPending.id !== lastAlertedSessionRef.current &&
-        localStorage.getItem("sacraluna_alertas_ativos") === "1"
+        alertasAtivos
       ) {
         lastAlertedSessionRef.current = nextPending.id;
         tocarAlerta();
+      }
+
+      // Se deixou de haver pedido pendente, limpa o último ID
+      if (!nextPending?.id) {
+        lastAlertedSessionRef.current = "";
       }
     } catch {}
   }
@@ -142,10 +156,7 @@ export default function ConsultorPage() {
       }
 
       // Só toca se entrou email novo depois da inicialização
-      if (
-        totalPendentes > lastPendingEmailsRef.current &&
-        localStorage.getItem("sacraluna_alertas_ativos") === "1"
-      ) {
+      if (totalPendentes > lastPendingEmailsRef.current && alertasAtivos) {
         tocarAlerta();
       }
 
@@ -175,7 +186,7 @@ export default function ConsultorPage() {
     }, 3000);
 
     return () => clearInterval(t);
-  }, [online, ocupado, responding]);
+  }, [online, ocupado, responding, alertasAtivos]);
 
   useEffect(() => {
     verificarEmailsPendentes();
@@ -185,7 +196,7 @@ export default function ConsultorPage() {
     }, 5000);
 
     return () => clearInterval(t);
-  }, []);
+  }, [alertasAtivos]);
 
   async function terminarSessao() {
     try {
@@ -230,6 +241,7 @@ export default function ConsultorPage() {
         Number(json?.consultor?.online ?? 0) === 0
       ) {
         setPendingChat(null);
+        lastAlertedSessionRef.current = "";
       }
     } catch (e: any) {
       setErro(e?.message || "Erro ao atualizar estado.");
@@ -298,6 +310,7 @@ export default function ConsultorPage() {
 
       const currentSessionId = pendingChat.id;
       setPendingChat(null);
+      lastAlertedSessionRef.current = "";
 
       if (action === "reject") {
         alert("Pedido rejeitado.");
