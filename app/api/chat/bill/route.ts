@@ -76,24 +76,11 @@ export async function POST(req: Request) {
     }
 
     const now = Math.floor(Date.now() / 1000);
-    const startedAt = Number(session.started_at || now);
     const alreadyBilledSeconds = Number(session.billed_seconds || 0);
-    const totalElapsedSeconds = Math.max(0, now - startedAt);
-    const unbilledSeconds = totalElapsedSeconds - alreadyBilledSeconds;
 
-    if (unbilledSeconds <= 0) {
-      return NextResponse.json({
-        ok: true,
-        charged: 0,
-        wallet_balance: null,
-        billed_seconds: alreadyBilledSeconds,
-        total_charged_eur: Number(session.total_charged_eur || 0),
-        consultor_earned_eur: Number(session.consultor_earned_eur || 0),
-        message: "Nada para faturar.",
-      });
-    }
-
-    const amountToCharge = round2((unbilledSeconds / 60) * pricePerMin);
+    // Cobrança fixa: 1 minuto por cada chamada a esta rota
+    const billedThisCallSeconds = 60;
+    const amountToCharge = round2(pricePerMin);
 
     if (amountToCharge <= 0) {
       return NextResponse.json({
@@ -201,7 +188,7 @@ export async function POST(req: Request) {
         `Ganho do consultor na sessão ${sessionId}`
       );
 
-      const newBilledSeconds = alreadyBilledSeconds + unbilledSeconds;
+      const newBilledSeconds = alreadyBilledSeconds + billedThisCallSeconds;
       const newTotalCharged = round2(Number(session.total_charged_eur || 0) + amountToCharge);
       const newConsultorEarnedSession = round2(
         Number(session.consultor_earned_eur || 0) + consultorShare
@@ -212,7 +199,8 @@ export async function POST(req: Request) {
         UPDATE chat_sessions
         SET billed_seconds = ?,
             total_charged_eur = ?,
-            consultor_earned_eur = ?
+            consultor_earned_eur = ?,
+            started_at = COALESCE(started_at, strftime('%s','now'))
         WHERE id = ?
         `
       ).run(
