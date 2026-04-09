@@ -28,6 +28,10 @@ type Consultor = {
   pack_3_preco?: number;
   pack_4_qtd?: number;
   pack_4_preco?: number;
+
+  wallet_balance_eur?: number;
+  wallet_earned_eur?: number;
+  wallet_spent_eur?: number;
 };
 
 export default function AdminClient() {
@@ -63,6 +67,7 @@ export default function AdminClient() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+
   const [editPreco, setEditPreco] = useState("");
   const [editPrecoChat, setEditPrecoChat] = useState("");
   const [editPrecoVoz, setEditPrecoVoz] = useState("");
@@ -77,8 +82,18 @@ export default function AdminClient() {
   const [editPack4Qtd, setEditPack4Qtd] = useState("");
   const [editPack4Preco, setEditPack4Preco] = useState("");
 
-  const ativosCount = useMemo(() => list.filter((c) => c.ativo === 1).length, [list]);
-  const destaqueCount = useMemo(() => list.filter((c) => c.destaque === 1).length, [list]);
+  const [walletValues, setWalletValues] = useState<Record<number, string>>({});
+  const [walletLoading, setWalletLoading] = useState<number | null>(null);
+
+  const ativosCount = useMemo(
+    () => list.filter((c) => c.ativo === 1).length,
+    [list]
+  );
+
+  const destaqueCount = useMemo(
+    () => list.filter((c) => c.destaque === 1).length,
+    [list]
+  );
 
   async function load() {
     setLoading(true);
@@ -94,7 +109,9 @@ export default function AdminClient() {
 
       const arr = Array.isArray(data?.consultores) ? data.consultores : [];
       arr.sort((a: Consultor, b: Consultor) =>
-        (a.nome || "").localeCompare(b.nome || "", "pt", { sensitivity: "base" })
+        (a.nome || "").localeCompare(b.nome || "", "pt", {
+          sensitivity: "base",
+        })
       );
 
       setList(arr);
@@ -124,6 +141,44 @@ export default function AdminClient() {
     }
 
     return data.url as string;
+  }
+
+  async function adjustWallet(consultorId: number, action: "add" | "remove") {
+    const rawValue = walletValues[consultorId] ?? "";
+    const amount = Number(String(rawValue).replace(",", "."));
+
+    if (!amount || amount <= 0) {
+      alert("Valor inválido.");
+      return;
+    }
+
+    setWalletLoading(consultorId);
+    setErr("");
+
+    try {
+      const res = await fetch("/api/admin/consultores/wallet-adjust", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consultor_id: consultorId, action, amount }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Erro ao ajustar saldo.");
+      }
+
+      setWalletValues((prev) => ({
+        ...prev,
+        [consultorId]: "",
+      }));
+
+      await load();
+    } catch (e: any) {
+      setErr(String(e?.message ?? e));
+    } finally {
+      setWalletLoading(null);
+    }
   }
 
   async function onCreate(e: React.FormEvent) {
@@ -164,7 +219,9 @@ export default function AdminClient() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error ?? data?.detail ?? "Erro ao criar consultor");
+      if (!res.ok) {
+        throw new Error(data?.error ?? data?.detail ?? "Erro ao criar consultor");
+      }
 
       setNome("");
       setEmail("");
@@ -294,7 +351,9 @@ export default function AdminClient() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error ?? "Erro ao alterar disponibilidade");
+      if (!res.ok) {
+        throw new Error(data?.error ?? "Erro ao alterar disponibilidade");
+      }
 
       await load();
     } catch (e: any) {
@@ -329,7 +388,9 @@ export default function AdminClient() {
   }
 
   async function deleteConsultor(c: Consultor) {
-    const ok = window.confirm(`Tens a certeza que queres eliminar "${c.nome}"?`);
+    const ok = window.confirm(
+      `Tens a certeza que queres eliminar "${c.nome}"?`
+    );
     if (!ok) return;
 
     setErr("");
@@ -387,42 +448,56 @@ export default function AdminClient() {
       <div style={styles.quickRow}>
         <Link href="/admin" style={styles.quickCardActive}>
           <div style={styles.quickTitle}>Consultores</div>
-          <div style={styles.quickText}>Gerir consultores, destaque e disponibilidade</div>
+          <div style={styles.quickText}>
+            Gerir consultores, destaque e disponibilidade
+          </div>
         </Link>
-      
-      <Link href="/admin/registos" style={styles.quickCard}>
-  <div style={styles.quickTitle}>Registos</div>
-  <div style={styles.quickText}>Ver clientes registados no site</div>
-</Link>
+
+        <Link href="/admin/registos" style={styles.quickCard}>
+          <div style={styles.quickTitle}>Registos</div>
+          <div style={styles.quickText}>Ver clientes registados no site</div>
+        </Link>
 
         <Link href="/admin/loja" style={styles.quickCard}>
           <div style={styles.quickTitle}>Serviços</div>
-          <div style={styles.quickText}>Criar serviços, descrição, imagens e preços</div>
+          <div style={styles.quickText}>
+            Criar serviços, descrição, imagens e preços
+          </div>
         </Link>
 
         <Link href="/admin/pedidos-servicos" style={styles.quickCard}>
           <div style={styles.quickTitle}>Pedidos</div>
-          <div style={styles.quickText}>Ver compras pagas e contactos dos clientes</div>
+          <div style={styles.quickText}>
+            Ver compras pagas e contactos dos clientes
+          </div>
         </Link>
 
         <Link href="/admin/blog" style={styles.quickCard}>
           <div style={styles.quickTitle}>Blog</div>
-          <div style={styles.quickText}>Criar cartas do dia e artigos com imagem e texto</div>
+          <div style={styles.quickText}>
+            Criar cartas do dia e artigos com imagem e texto
+          </div>
         </Link>
 
         <Link href="/admin/historico" style={styles.quickCard}>
           <div style={styles.quickTitle}>Histórico</div>
-          <div style={styles.quickText}>Ver chats e emails/perguntas de todos os consultores</div>
+          <div style={styles.quickText}>
+            Ver chats e emails/perguntas de todos os consultores
+          </div>
         </Link>
 
         <Link href="/admin/mensagens" style={styles.quickCard}>
           <div style={styles.quickTitle}>Mensagens</div>
-          <div style={styles.quickText}>Ver mensagens recebidas do formulário Fale connosco</div>
+          <div style={styles.quickText}>
+            Ver mensagens recebidas do formulário Fale connosco
+          </div>
         </Link>
 
         <Link href="/admin/candidaturas" style={styles.quickCard}>
           <div style={styles.quickTitle}>Candidaturas</div>
-          <div style={styles.quickText}>Ver candidaturas recebidas do Trabalhe connosco</div>
+          <div style={styles.quickText}>
+            Ver candidaturas recebidas do Trabalhe connosco
+          </div>
         </Link>
       </div>
 
@@ -434,10 +509,18 @@ export default function AdminClient() {
 
           <form onSubmit={onCreate} style={styles.form}>
             <label style={styles.label}>Nome</label>
-            <input style={styles.input} value={nome} onChange={(e) => setNome(e.target.value)} />
+            <input
+              style={styles.input}
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+            />
 
             <label style={styles.label}>Email</label>
-            <input style={styles.input} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              style={styles.input}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
 
             <label style={styles.label}>Telefone</label>
             <input
@@ -455,7 +538,11 @@ export default function AdminClient() {
             />
 
             <label style={styles.label}>Preço base (€ / min)</label>
-            <input style={styles.input} value={preco} onChange={(e) => setPreco(e.target.value)} />
+            <input
+              style={styles.input}
+              value={preco}
+              onChange={(e) => setPreco(e.target.value)}
+            />
 
             <label style={styles.label}>Preço chat (€ / min)</label>
             <input
@@ -484,38 +571,70 @@ export default function AdminClient() {
               <div style={styles.packGrid}>
                 <div>
                   <label style={styles.label}>Pack 1 - Nº perguntas</label>
-                  <input style={styles.input} value={pack1Qtd} onChange={(e) => setPack1Qtd(e.target.value)} />
+                  <input
+                    style={styles.input}
+                    value={pack1Qtd}
+                    onChange={(e) => setPack1Qtd(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label style={styles.label}>Pack 1 - Preço (€)</label>
-                  <input style={styles.input} value={pack1Preco} onChange={(e) => setPack1Preco(e.target.value)} />
+                  <input
+                    style={styles.input}
+                    value={pack1Preco}
+                    onChange={(e) => setPack1Preco(e.target.value)}
+                  />
                 </div>
 
                 <div>
                   <label style={styles.label}>Pack 2 - Nº perguntas</label>
-                  <input style={styles.input} value={pack2Qtd} onChange={(e) => setPack2Qtd(e.target.value)} />
+                  <input
+                    style={styles.input}
+                    value={pack2Qtd}
+                    onChange={(e) => setPack2Qtd(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label style={styles.label}>Pack 2 - Preço (€)</label>
-                  <input style={styles.input} value={pack2Preco} onChange={(e) => setPack2Preco(e.target.value)} />
+                  <input
+                    style={styles.input}
+                    value={pack2Preco}
+                    onChange={(e) => setPack2Preco(e.target.value)}
+                  />
                 </div>
 
                 <div>
                   <label style={styles.label}>Pack 3 - Nº perguntas</label>
-                  <input style={styles.input} value={pack3Qtd} onChange={(e) => setPack3Qtd(e.target.value)} />
+                  <input
+                    style={styles.input}
+                    value={pack3Qtd}
+                    onChange={(e) => setPack3Qtd(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label style={styles.label}>Pack 3 - Preço (€)</label>
-                  <input style={styles.input} value={pack3Preco} onChange={(e) => setPack3Preco(e.target.value)} />
+                  <input
+                    style={styles.input}
+                    value={pack3Preco}
+                    onChange={(e) => setPack3Preco(e.target.value)}
+                  />
                 </div>
 
                 <div>
                   <label style={styles.label}>Pack 4 - Nº perguntas</label>
-                  <input style={styles.input} value={pack4Qtd} onChange={(e) => setPack4Qtd(e.target.value)} />
+                  <input
+                    style={styles.input}
+                    value={pack4Qtd}
+                    onChange={(e) => setPack4Qtd(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label style={styles.label}>Pack 4 - Preço (€)</label>
-                  <input style={styles.input} value={pack4Preco} onChange={(e) => setPack4Preco(e.target.value)} />
+                  <input
+                    style={styles.input}
+                    value={pack4Preco}
+                    onChange={(e) => setPack4Preco(e.target.value)}
+                  />
                 </div>
               </div>
             </div>
@@ -543,7 +662,9 @@ export default function AdminClient() {
                     }
                   }}
                 />
-                <div style={styles.small}>{uploading ? "A enviar..." : fotoUrl}</div>
+                <div style={styles.small}>
+                  {uploading ? "A enviar..." : fotoUrl}
+                </div>
               </div>
             </div>
 
@@ -564,7 +685,11 @@ export default function AdminClient() {
             />
 
             <label style={styles.checkboxRow}>
-              <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={ativo}
+                onChange={(e) => setAtivo(e.target.checked)}
+              />
               <span>Ativo</span>
             </label>
 
@@ -592,8 +717,7 @@ export default function AdminClient() {
             </button>
           </form>
         </div>
-
-        <div style={styles.card}>
+<div style={styles.card}>
           <h2 style={styles.h2}>Lista</h2>
 
           {loading ? (
@@ -606,12 +730,18 @@ export default function AdminClient() {
                 <div key={c.id} style={styles.item}>
                   <img src={c.foto_url} alt={c.nome} style={styles.avatar} />
 
-                  <div style={{ flex: 1, minWidth: 180 }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
                     <div style={styles.itemName}>{c.nome}</div>
                     <div style={styles.small}>{c.email}</div>
-                    <div style={styles.small}>Telefone: {c.telefone || "Sem telefone"}</div>
-                    <div style={styles.small}>Chat: {Number(c.preco_chat ?? 0).toFixed(2)}€/min</div>
-                    <div style={styles.small}>Voz: {Number(c.preco_voz ?? 0).toFixed(2)}€/min</div>
+                    <div style={styles.small}>
+                      Telefone: {c.telefone || "Sem telefone"}
+                    </div>
+                    <div style={styles.small}>
+                      Chat: {Number(c.preco_chat ?? 0).toFixed(2)}€/min
+                    </div>
+                    <div style={styles.small}>
+                      Voz: {Number(c.preco_voz ?? 0).toFixed(2)}€/min
+                    </div>
                     <div style={styles.small}>
                       Percentagem: {Number(c.percentagem_ganho ?? 0).toFixed(0)}%
                     </div>
@@ -619,21 +749,75 @@ export default function AdminClient() {
                       VoIP: {c.voip_ativo === 1 ? "Ligado" : "Desligado"}
                     </div>
                     <div style={styles.small}>
-                      Packs email:{" "}
-                      {Number(c.pack_1_qtd ?? 1)} por {Number(c.pack_1_preco ?? 1).toFixed(2)}€ •{" "}
-                      {Number(c.pack_2_qtd ?? 3)} por {Number(c.pack_2_preco ?? 3).toFixed(2)}€ •{" "}
-                      {Number(c.pack_3_qtd ?? 5)} por {Number(c.pack_3_preco ?? 5).toFixed(2)}€ •{" "}
-                      {Number(c.pack_4_qtd ?? 10)} por {Number(c.pack_4_preco ?? 10).toFixed(2)}€
+                      Packs email: {Number(c.pack_1_qtd ?? 1)} por{" "}
+                      {Number(c.pack_1_preco ?? 1).toFixed(2)}€ •{" "}
+                      {Number(c.pack_2_qtd ?? 3)} por{" "}
+                      {Number(c.pack_2_preco ?? 3).toFixed(2)}€ •{" "}
+                      {Number(c.pack_3_qtd ?? 5)} por{" "}
+                      {Number(c.pack_3_preco ?? 5).toFixed(2)}€ •{" "}
+                      {Number(c.pack_4_qtd ?? 10)} por{" "}
+                      {Number(c.pack_4_preco ?? 10).toFixed(2)}€
                     </div>
                     <div style={styles.small}>
                       {c.online === 1 ? "Disponível" : "Indisponível"} •{" "}
                       {c.destaque === 1 ? "Em destaque" : "Normal"}
                     </div>
+
+                    <div style={styles.walletBox}>
+                      <div style={styles.walletTitle}>Carteira</div>
+
+                      <div style={styles.small}>
+                        Saldo disponível:{" "}
+                        <b>{Number(c.wallet_balance_eur ?? 0).toFixed(2)}€</b>
+                      </div>
+
+                      <div style={styles.small}>
+                        Ganhos totais:{" "}
+                        <b>{Number(c.wallet_earned_eur ?? 0).toFixed(2)}€</b>
+                      </div>
+
+                      <div style={styles.small}>
+                        Gasto/levantado:{" "}
+                        <b>{Number(c.wallet_spent_eur ?? 0).toFixed(2)}€</b>
+                      </div>
+
+                      <input
+                        style={styles.walletInput}
+                        placeholder="Valor em €"
+                        value={walletValues[c.id] || ""}
+                        onChange={(e) =>
+                          setWalletValues((prev) => ({
+                            ...prev,
+                            [c.id]: e.target.value,
+                          }))
+                        }
+                      />
+
+                      <div style={styles.walletBtns}>
+                        <button
+                          style={styles.btnGreenSmall}
+                          onClick={() => adjustWallet(c.id, "add")}
+                          disabled={walletLoading === c.id}
+                        >
+                          {walletLoading === c.id ? "A processar..." : "Adicionar saldo"}
+                        </button>
+
+                        <button
+                          style={styles.btnDangerSmall}
+                          onClick={() => adjustWallet(c.id, "remove")}
+                          disabled={walletLoading === c.id}
+                        >
+                          {walletLoading === c.id ? "A processar..." : "Retirar saldo"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   <div style={styles.actionCol}>
                     <div style={styles.badge}>{c.ativo ? "Ativo" : "Inativo"}</div>
-                    <div style={styles.badgeGold}>{c.destaque ? "Destaque" : "Normal"}</div>
+                    <div style={styles.badgeGold}>
+                      {c.destaque ? "Destaque" : "Normal"}
+                    </div>
 
                     <button
                       style={styles.btnGreenSmall}
@@ -652,7 +836,11 @@ export default function AdminClient() {
                     </button>
 
                     <button
-                      style={c.voip_ativo === 1 ? styles.btnWarnSmall : styles.btnGreenSmall}
+                      style={
+                        c.voip_ativo === 1
+                          ? styles.btnWarnSmall
+                          : styles.btnGreenSmall
+                      }
                       onClick={() => toggleVoip(c)}
                       disabled={togglingId === c.id}
                     >
@@ -664,9 +852,14 @@ export default function AdminClient() {
                     </button>
 
                     <button
-                      style={c.destaque ? styles.btnWarnSmall : styles.btnGoldSmall}
+                      style={
+                        c.destaque ? styles.btnWarnSmall : styles.btnGoldSmall
+                      }
                       onClick={() => toggleDestaque(c)}
-                      disabled={togglingId === c.id || (c.destaque !== 1 && destaqueCount >= 2)}
+                      disabled={
+                        togglingId === c.id ||
+                        (c.destaque !== 1 && destaqueCount >= 2)
+                      }
                     >
                       {togglingId === c.id
                         ? "A alterar..."
@@ -690,7 +883,9 @@ export default function AdminClient() {
                         setEditPreco(String(Number(c.preco_por_min ?? 0)));
                         setEditPrecoChat(String(Number(c.preco_chat ?? 0)));
                         setEditPrecoVoz(String(Number(c.preco_voz ?? 0)));
-                        setEditPercentagem(String(Number(c.percentagem_ganho ?? 40)));
+                        setEditPercentagem(
+                          String(Number(c.percentagem_ganho ?? 40))
+                        );
                         setEditPack1Qtd(String(Number(c.pack_1_qtd ?? 1)));
                         setEditPack1Preco(String(Number(c.pack_1_preco ?? 1)));
                         setEditPack2Qtd(String(Number(c.pack_2_qtd ?? 3)));
@@ -712,7 +907,10 @@ export default function AdminClient() {
       </div>
 
       {edit && (
-        <div style={styles.modalBackdrop} onClick={() => !saving && setEdit(null)}>
+        <div
+          style={styles.modalBackdrop}
+          onClick={() => !saving && setEdit(null)}
+        >
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
             <h2 style={styles.h2}>Editar consultor</h2>
 
@@ -873,7 +1071,9 @@ export default function AdminClient() {
                       }
                     }}
                   />
-                  <div style={styles.small}>{uploading ? "A enviar..." : edit.foto_url}</div>
+                  <div style={styles.small}>
+                    {uploading ? "A enviar..." : edit.foto_url}
+                  </div>
                 </div>
               </div>
 
@@ -881,21 +1081,27 @@ export default function AdminClient() {
               <input
                 style={styles.input}
                 value={edit.especialidades ?? ""}
-                onChange={(e) => setEdit({ ...edit, especialidades: e.target.value })}
+                onChange={(e) =>
+                  setEdit({ ...edit, especialidades: e.target.value })
+                }
               />
 
               <label style={styles.label}>Apresentação</label>
               <textarea
                 style={styles.textarea}
                 value={edit.apresentacao ?? ""}
-                onChange={(e) => setEdit({ ...edit, apresentacao: e.target.value })}
+                onChange={(e) =>
+                  setEdit({ ...edit, apresentacao: e.target.value })
+                }
               />
 
               <label style={styles.checkboxRow}>
                 <input
                   type="checkbox"
                   checked={edit.ativo === 1}
-                  onChange={(e) => setEdit({ ...edit, ativo: e.target.checked ? 1 : 0 })}
+                  onChange={(e) =>
+                    setEdit({ ...edit, ativo: e.target.checked ? 1 : 0 })
+                  }
                 />
                 <span>Ativo</span>
               </label>
@@ -905,7 +1111,9 @@ export default function AdminClient() {
                   type="checkbox"
                   checked={edit.destaque === 1}
                   disabled={edit.destaque !== 1 && destaqueCount >= 2}
-                  onChange={(e) => setEdit({ ...edit, destaque: e.target.checked ? 1 : 0 })}
+                  onChange={(e) =>
+                    setEdit({ ...edit, destaque: e.target.checked ? 1 : 0 })
+                  }
                 />
                 <span>Em destaque</span>
               </label>
@@ -914,7 +1122,9 @@ export default function AdminClient() {
                 <input
                   type="checkbox"
                   checked={edit.online === 1}
-                  onChange={(e) => setEdit({ ...edit, online: e.target.checked ? 1 : 0 })}
+                  onChange={(e) =>
+                    setEdit({ ...edit, online: e.target.checked ? 1 : 0 })
+                  }
                 />
                 <span>Disponível</span>
               </label>
@@ -1062,6 +1272,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   input: {
+    padding: "9px 11px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(0,0,0,0.35)",
+    color: "white",
+  },
+
+  walletInput: {
+    marginTop: 8,
+    width: "100%",
     padding: "9px 11px",
     borderRadius: 10,
     border: "1px solid rgba(255,255,255,0.16)",
@@ -1246,6 +1466,28 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     width: 140,
     marginLeft: "auto",
+  },
+
+  walletBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 10,
+    border: "1px solid rgba(212,175,55,0.25)",
+    background: "rgba(212,175,55,0.05)",
+  },
+
+  walletTitle: {
+    fontSize: 13,
+    fontWeight: 900,
+    marginBottom: 6,
+    color: "#f4d78b",
+  },
+
+  walletBtns: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 8,
+    marginTop: 8,
   },
 
   modalBackdrop: {
