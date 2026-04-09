@@ -76,7 +76,7 @@ export default function ConsultorPage() {
       }
 
       if (!resWallet.ok) {
-        throw new Error(jsonWallet?.error || "Erro ao carregar ganhos do consultor.");
+        throw new Error(jsonWallet?.error || "Erro ao carregar dados financeiros.");
       }
 
       setConsultorNome(String(jsonMe?.consultor?.nome ?? "Consultor"));
@@ -107,14 +107,12 @@ export default function ConsultorPage() {
       const nextPending = json?.pending ?? null;
       setPendingChat(nextPending);
 
-      // Primeira leitura: inicializa sem tocar alerta
       if (!pendingChatInitializedRef.current) {
         pendingChatInitializedRef.current = true;
         lastAlertedSessionRef.current = nextPending?.id ?? "";
         return;
       }
 
-      // Só toca quando entra um pedido novo depois da inicialização
       if (
         nextPending?.id &&
         nextPending.id !== lastAlertedSessionRef.current &&
@@ -124,7 +122,6 @@ export default function ConsultorPage() {
         tocarAlerta();
       }
 
-      // Se deixou de haver pedido pendente, limpa o último ID
       if (!nextPending?.id) {
         lastAlertedSessionRef.current = "";
       }
@@ -147,7 +144,6 @@ export default function ConsultorPage() {
       );
       const totalPendentes = pendentes.length;
 
-      // Primeira leitura: inicializa sem tocar alerta
       if (!emailsInitializedRef.current) {
         emailsInitializedRef.current = true;
         lastPendingEmailsRef.current = totalPendentes;
@@ -155,7 +151,6 @@ export default function ConsultorPage() {
         return;
       }
 
-      // Só toca se entrou email novo depois da inicialização
       if (totalPendentes > lastPendingEmailsRef.current && alertasAtivos) {
         tocarAlerta();
       }
@@ -335,8 +330,7 @@ export default function ConsultorPage() {
   }
 
   const ganhosHoje = Number(walletData?.stats?.ganhos_hoje_eur ?? 0);
-  const ganhosTotais = Number(walletData?.wallet?.earned_eur ?? 0);
-  const saldoDisponivel = Number(walletData?.wallet?.balance_eur ?? 0);
+  const saldoParaLevantamento = Number(walletData?.wallet?.balance_eur ?? 0);
   const consultasHoje = Number(walletData?.stats?.consultas_hoje ?? 0);
   const consultasTotal = Number(walletData?.stats?.consultas_total ?? 0);
 
@@ -462,13 +456,8 @@ export default function ConsultorPage() {
         </div>
 
         <div style={styles.card}>
-          <div style={styles.cardLabel}>Ganhos totais</div>
-          <div style={styles.cardValue}>{ganhosTotais.toFixed(2)}€</div>
-        </div>
-
-        <div style={styles.card}>
-          <div style={styles.cardLabel}>Saldo disponível</div>
-          <div style={styles.cardValue}>{saldoDisponivel.toFixed(2)}€</div>
+          <div style={styles.cardLabel}>Saldo para levantamento</div>
+          <div style={styles.cardValue}>{saldoParaLevantamento.toFixed(2)}€</div>
         </div>
 
         <div style={styles.card}>
@@ -485,10 +474,9 @@ export default function ConsultorPage() {
       <div style={styles.noteCard}>
         <h2 style={styles.h2}>Resumo</h2>
         <p style={styles.noteText}>
-          Aqui vês os teus ganhos acumulados no sistema. O campo “Ganhos hoje”
-          mostra apenas o que foi gerado hoje. “Ganhos totais” mostra tudo o que
-          já recebeste no site. “Saldo disponível” mostra o valor atualmente
-          associado à tua wallet de consultor.
+          Aqui vês o valor que tens disponível no sistema para levantamento.
+          “Ganhos hoje” mostra apenas o que foi gerado hoje. “Saldo para levantamento”
+          mostra o montante atualmente disponível na tua carteira de consultor.
         </p>
       </div>
     </main>
