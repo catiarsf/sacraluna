@@ -165,8 +165,11 @@ export default function AdminClient() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data?.error || "Erro ao ajustar saldo.");
-      }
+  console.error("ERRO AJUSTE WALLET:", data);
+  throw new Error(
+    data?.error || data?.detail || `Erro ao ajustar saldo (HTTP ${res.status}).`
+  );
+} 
 
       setWalletValues((prev) => ({
         ...prev,
