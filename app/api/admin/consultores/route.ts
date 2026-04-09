@@ -22,31 +22,37 @@ export async function GET() {
       .prepare(
         `
         SELECT
-          id,
-          nome,
-          email,
-          telefone,
-          preco_por_min,
-          preco_chat,
-          preco_voz,
-          percentagem_ganho,
-          foto_url,
-          especialidades,
-          apresentacao,
-          ativo,
-          destaque,
-          online,
-          voip_ativo,
-          pack_1_qtd,
-          pack_1_preco,
-          pack_2_qtd,
-          pack_2_preco,
-          pack_3_qtd,
-          pack_3_preco,
-          pack_4_qtd,
-          pack_4_preco
-        FROM consultores
-        ORDER BY id DESC
+          c.id,
+          c.nome,
+          c.email,
+          c.telefone,
+          c.preco_por_min,
+          c.preco_chat,
+          c.preco_voz,
+          c.percentagem_ganho,
+          c.foto_url,
+          c.especialidades,
+          c.apresentacao,
+          c.ativo,
+          c.destaque,
+          c.online,
+          c.voip_ativo,
+          c.pack_1_qtd,
+          c.pack_1_preco,
+          c.pack_2_qtd,
+          c.pack_2_preco,
+          c.pack_3_qtd,
+          c.pack_3_preco,
+          c.pack_4_qtd,
+          c.pack_4_preco,
+          COALESCE(w.balance_eur, 0) AS wallet_balance_eur,
+          COALESCE(w.earned_eur, 0) AS wallet_earned_eur,
+          COALESCE(w.spent_eur, 0) AS wallet_spent_eur
+        FROM consultores c
+        LEFT JOIN wallets w
+          ON w.user_type = 'consultor'
+         AND w.user_id = c.id
+        ORDER BY c.id DESC
         `
       )
       .all();
@@ -85,7 +91,8 @@ export async function POST(req: Request) {
     const ativo = body?.ativo ? 1 : 0;
     const destaque = body?.destaque ? 1 : 0;
     const online = body?.online ? 1 : 0;
-    const voipAtivo = typeof body?.voip_ativo === "undefined" ? 1 : body?.voip_ativo ? 1 : 0;
+    const voipAtivo =
+      typeof body?.voip_ativo === "undefined" ? 1 : body?.voip_ativo ? 1 : 0;
 
     const pack1Qtd = toInt(body?.pack_1_qtd ?? 1, 1);
     const pack1Preco = toNumber(body?.pack_1_preco ?? 1);
@@ -202,31 +209,34 @@ export async function POST(req: Request) {
       .prepare(
         `
         SELECT
-          id,
-          nome,
-          email,
-          telefone,
-          preco_por_min,
-          preco_chat,
-          preco_voz,
-          percentagem_ganho,
-          foto_url,
-          especialidades,
-          apresentacao,
-          ativo,
-          destaque,
-          online,
-          voip_ativo,
-          pack_1_qtd,
-          pack_1_preco,
-          pack_2_qtd,
-          pack_2_preco,
-          pack_3_qtd,
-          pack_3_preco,
-          pack_4_qtd,
-          pack_4_preco
-        FROM consultores
-        WHERE id = ?
+          c.id,
+          c.nome,
+          c.email,
+          c.telefone,
+          c.preco_por_min,
+          c.preco_chat,
+          c.preco_voz,
+          c.percentagem_ganho,
+          c.foto_url,
+          c.especialidades,
+          c.apresentacao,
+          c.ativo,
+          c.destaque,
+          c.online,
+          c.voip_ativo,
+          c.pack_1_qtd,
+          c.pack_1_preco,
+          c.pack_2_qtd,
+          c.pack_2_preco,
+          c.pack_3_qtd,
+          c.pack_3_preco,
+          c.pack_4_qtd,
+          c.pack_4_preco,
+          0 AS wallet_balance_eur,
+          0 AS wallet_earned_eur,
+          0 AS wallet_spent_eur
+        FROM consultores c
+        WHERE c.id = ?
         `
       )
       .get(result.lastInsertRowid);
