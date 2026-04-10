@@ -19,15 +19,22 @@ export async function GET() {
       .prepare(
         `
         SELECT
-          id,
-          nome,
-          descricao,
-          preco_eur,
-          imagem_url,
-          ativo,
-          created_at
-        FROM servicos
-        ORDER BY id DESC
+          s.id,
+          s.nome,
+          s.descricao,
+          s.preco_tipo,
+          s.preco_eur,
+          s.preco_texto,
+          s.comissao_tipo,
+          s.comissao_valor,
+          s.imagem_url,
+          s.ativo,
+          s.consultor_id,
+          c.nome as consultor_nome,
+          s.created_at
+        FROM servicos s
+        LEFT JOIN consultores c ON c.id = s.consultor_id
+        ORDER BY s.id DESC
         `
       )
       .all();
@@ -56,20 +63,39 @@ export async function POST(req: Request) {
 
     const nome = norm(body?.nome);
     const descricao = norm(body?.descricao);
+    const consultor_id = Number(body?.consultor_id);
+    const preco_tipo = norm(body?.preco_tipo) || "fixo";
     const preco_eur = toNumber(body?.preco_eur);
+    const preco_texto = norm(body?.preco_texto);
+    const comissao_tipo = norm(body?.comissao_tipo) || "percentagem";
+    const comissao_valor = toNumber(body?.comissao_valor);
     const imagem_url = norm(body?.imagem_url);
     const ativo = body?.ativo ? 1 : 0;
 
     if (!nome) {
       return NextResponse.json(
-        { ok: false, error: "O nome do serviço é obrigatório." },
+        { ok: false, error: "O nome é obrigatório." },
         { status: 400 }
       );
     }
 
-    if (!preco_eur || preco_eur <= 0) {
+    if (!consultor_id) {
+      return NextResponse.json(
+        { ok: false, error: "Tens de escolher a consultora." },
+        { status: 400 }
+      );
+    }
+
+    if (preco_tipo === "fixo" && preco_eur <= 0) {
       return NextResponse.json(
         { ok: false, error: "Preço inválido." },
+        { status: 400 }
+      );
+    }
+
+    if (preco_tipo === "sob_consulta" && !preco_texto) {
+      return NextResponse.json(
+        { ok: false, error: "Texto de preço obrigatório." },
         { status: 400 }
       );
     }
@@ -78,43 +104,36 @@ export async function POST(req: Request) {
       .prepare(
         `
         INSERT INTO servicos (
+          consultor_id,
           nome,
           descricao,
+          preco_tipo,
           preco_eur,
+          preco_texto,
+          comissao_tipo,
+          comissao_valor,
           imagem_url,
           ativo
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
       )
       .run(
+        consultor_id,
         nome,
         descricao,
-        preco_eur,
+        preco_tipo,
+        preco_tipo === "fixo" ? preco_eur : 0,
+        preco_tipo === "sob_consulta" ? preco_texto : null,
+        comissao_tipo,
+        comissao_valor || 40,
         imagem_url || "/servicos/default.jpg",
         ativo
       );
 
-    const servico = db
-      .prepare(
-        `
-        SELECT
-          id,
-          nome,
-          descricao,
-          preco_eur,
-          imagem_url,
-          ativo,
-          created_at
-        FROM servicos
-        WHERE id = ?
-        `
-      )
-      .get(info.lastInsertRowid);
-
     return NextResponse.json({
       ok: true,
-      servico,
+      id: info.lastInsertRowid,
     });
   } catch (err: any) {
     return NextResponse.json(

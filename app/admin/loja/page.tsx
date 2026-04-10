@@ -3,11 +3,22 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-type Servico = {
+type ConsultorOption = {
   id: number;
   nome: string;
+};
+
+type Servico = {
+  id: number;
+  consultor_id?: number | null;
+  consultor_nome?: string | null;
+  nome: string;
   descricao: string;
+  preco_tipo?: "fixo" | "sob_consulta";
   preco_eur: number;
+  preco_texto?: string | null;
+  comissao_tipo?: "percentagem" | "fixa";
+  comissao_valor?: number;
   imagem_url: string;
   ativo: 0 | 1;
   created_at?: number;
@@ -17,10 +28,16 @@ export default function AdminLojaPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [list, setList] = useState<Servico[]>([]);
+  const [consultores, setConsultores] = useState<ConsultorOption[]>([]);
 
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [consultorId, setConsultorId] = useState("");
+  const [precoTipo, setPrecoTipo] = useState<"fixo" | "sob_consulta">("fixo");
   const [preco, setPreco] = useState("10.00");
+  const [precoTexto, setPrecoTexto] = useState("Preço sob consulta");
+  const [comissaoTipo, setComissaoTipo] = useState<"percentagem" | "fixa">("percentagem");
+  const [comissaoValor, setComissaoValor] = useState("40");
   const [imagemUrl, setImagemUrl] = useState("/servicos/default.jpg");
   const [ativo, setAtivo] = useState(true);
 
@@ -28,7 +45,13 @@ export default function AdminLojaPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+
   const [editPreco, setEditPreco] = useState("");
+  const [editPrecoTipo, setEditPrecoTipo] = useState<"fixo" | "sob_consulta">("fixo");
+  const [editPrecoTexto, setEditPrecoTexto] = useState("Preço sob consulta");
+  const [editConsultorId, setEditConsultorId] = useState("");
+  const [editComissaoTipo, setEditComissaoTipo] = useState<"percentagem" | "fixa">("percentagem");
+  const [editComissaoValor, setEditComissaoValor] = useState("40");
 
   const ativosCount = useMemo(() => list.filter((s) => s.ativo === 1).length, [list]);
 
@@ -37,19 +60,40 @@ export default function AdminLojaPage() {
     setErr("");
 
     try {
-      const res = await fetch("/api/admin/servicos", { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
+      const [resServicos, resConsultores] = await Promise.all([
+        fetch("/api/admin/servicos", { cache: "no-store" }),
+        fetch("/api/admin/consultores", { cache: "no-store" }),
+      ]);
 
-      if (!res.ok) {
-        throw new Error(data?.error || "Erro ao carregar serviços.");
+      const dataServicos = await resServicos.json().catch(() => ({}));
+      const dataConsultores = await resConsultores.json().catch(() => ({}));
+
+      if (!resServicos.ok) {
+        throw new Error(dataServicos?.error || "Erro ao carregar serviços.");
       }
 
-      const arr = Array.isArray(data?.servicos) ? data.servicos : [];
+      if (!resConsultores.ok) {
+        throw new Error(dataConsultores?.error || "Erro ao carregar consultores.");
+      }
+
+      const arr = Array.isArray(dataServicos?.servicos) ? dataServicos.servicos : [];
       arr.sort((a: Servico, b: Servico) =>
         (a.nome || "").localeCompare(b.nome || "", "pt", { sensitivity: "base" })
       );
-
       setList(arr);
+
+      const cons = Array.isArray(dataConsultores?.consultores) ? dataConsultores.consultores : [];
+      const mapped = cons
+        .filter((c: any) => Number(c?.ativo ?? 0) === 1)
+        .map((c: any) => ({
+          id: Number(c.id),
+          nome: String(c.nome ?? ""),
+        }))
+        .sort((a: ConsultorOption, b: ConsultorOption) =>
+          a.nome.localeCompare(b.nome, "pt", { sensitivity: "base" })
+        );
+
+      setConsultores(mapped);
     } catch (e: any) {
       setErr(String(e?.message ?? e));
     } finally {
@@ -84,15 +128,36 @@ export default function AdminLojaPage() {
     setErr("");
 
     try {
+      if (!consultorId) {
+        throw new Error("Tens de escolher a consultora responsável.");
+      }
+
+      if (!nome.trim()) {
+        throw new Error("O nome do serviço é obrigatório.");
+      }
+
+      if (precoTipo === "fixo" && (!preco || Number(preco) <= 0)) {
+        throw new Error("No preço fixo, tens de indicar um valor válido.");
+      }
+
+      if (precoTipo === "sob_consulta" && !precoTexto.trim()) {
+        throw new Error("No modo sob consulta, tens de indicar o texto do preço.");
+      }
+
       const res = await fetch("/api/admin/servicos", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          consultor_id: Number(consultorId),
           nome,
           descricao,
-          preco_eur: Number(preco),
+          preco_tipo: precoTipo,
+          preco_eur: precoTipo === "fixo" ? Number(preco) : 0,
+          preco_texto: precoTipo === "sob_consulta" ? precoTexto.trim() : null,
+          comissao_tipo: comissaoTipo,
+          comissao_valor: Number(comissaoValor),
           imagem_url: imagemUrl,
           ativo,
         }),
@@ -106,7 +171,12 @@ export default function AdminLojaPage() {
 
       setNome("");
       setDescricao("");
+      setConsultorId("");
+      setPrecoTipo("fixo");
       setPreco("10.00");
+      setPrecoTexto("Preço sob consulta");
+      setComissaoTipo("percentagem");
+      setComissaoValor("40");
       setImagemUrl("/servicos/default.jpg");
       setAtivo(true);
 
@@ -123,15 +193,36 @@ export default function AdminLojaPage() {
     setErr("");
 
     try {
+      if (!editConsultorId) {
+        throw new Error("Tens de escolher a consultora responsável.");
+      }
+
+      if (!edit.nome.trim()) {
+        throw new Error("O nome do serviço é obrigatório.");
+      }
+
+      if (editPrecoTipo === "fixo" && (!editPreco || Number(editPreco) <= 0)) {
+        throw new Error("No preço fixo, tens de indicar um valor válido.");
+      }
+
+      if (editPrecoTipo === "sob_consulta" && !editPrecoTexto.trim()) {
+        throw new Error("No modo sob consulta, tens de indicar o texto do preço.");
+      }
+
       const res = await fetch(`/api/admin/servicos/${edit.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          consultor_id: Number(editConsultorId),
           nome: edit.nome,
           descricao: edit.descricao,
-          preco_eur: Number(editPreco),
+          preco_tipo: editPrecoTipo,
+          preco_eur: editPrecoTipo === "fixo" ? Number(editPreco) : 0,
+          preco_texto: editPrecoTipo === "sob_consulta" ? editPrecoTexto.trim() : null,
+          comissao_tipo: editComissaoTipo,
+          comissao_valor: Number(editComissaoValor),
           imagem_url: edit.imagem_url,
           ativo: edit.ativo === 1,
         }),
@@ -145,6 +236,12 @@ export default function AdminLojaPage() {
 
       setEdit(null);
       setEditPreco("");
+      setEditPrecoTipo("fixo");
+      setEditPrecoTexto("Preço sob consulta");
+      setEditConsultorId("");
+      setEditComissaoTipo("percentagem");
+      setEditComissaoValor("40");
+
       await load();
     } catch (e: any) {
       setErr(String(e?.message ?? e));
@@ -203,6 +300,11 @@ export default function AdminLojaPage() {
       if (edit?.id === s.id) {
         setEdit(null);
         setEditPreco("");
+        setEditPrecoTipo("fixo");
+        setEditPrecoTexto("Preço sob consulta");
+        setEditConsultorId("");
+        setEditComissaoTipo("percentagem");
+        setEditComissaoValor("40");
       }
 
       await load();
@@ -211,6 +313,13 @@ export default function AdminLojaPage() {
     } finally {
       setTogglingId(null);
     }
+  }
+
+  function renderPreco(servico: Servico) {
+    if (servico.preco_tipo === "sob_consulta") {
+      return servico.preco_texto?.trim() || "Preço sob consulta";
+    }
+    return `${Number(servico.preco_eur ?? 0).toFixed(2)}€`;
   }
 
   return (
@@ -235,7 +344,7 @@ export default function AdminLojaPage() {
 
         <Link href="/admin/loja" style={styles.quickCardActive}>
           <div style={styles.quickTitle}>Loja</div>
-          <div style={styles.quickText}>Criar serviços, descrição, imagens e preços</div>
+          <div style={styles.quickText}>Criar serviços, consultora, preço e comissão</div>
         </Link>
 
         <Link href="/admin/pedidos-servicos" style={styles.quickCard}>
@@ -256,7 +365,7 @@ export default function AdminLojaPage() {
               style={styles.input}
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              placeholder="Ex: Mesa Radiónica"
+              placeholder="Ex: Limpeza energética"
             />
 
             <label style={styles.label}>Descrição</label>
@@ -267,12 +376,70 @@ export default function AdminLojaPage() {
               placeholder="Descreve o que inclui este serviço..."
             />
 
-            <label style={styles.label}>Preço (€)</label>
+            <label style={styles.label}>Consultora responsável</label>
+            <select
+              style={styles.input}
+              value={consultorId}
+              onChange={(e) => setConsultorId(e.target.value)}
+            >
+              <option value="">Escolhe a consultora</option>
+              {consultores.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </select>
+
+            <label style={styles.label}>Tipo de preço</label>
+            <select
+              style={styles.input}
+              value={precoTipo}
+              onChange={(e) => setPrecoTipo(e.target.value as "fixo" | "sob_consulta")}
+            >
+              <option value="fixo">Preço fixo</option>
+              <option value="sob_consulta">Preço sob consulta</option>
+            </select>
+
+            {precoTipo === "fixo" ? (
+              <>
+                <label style={styles.label}>Preço (€)</label>
+                <input
+                  style={styles.input}
+                  value={preco}
+                  onChange={(e) => setPreco(e.target.value)}
+                  placeholder="10.00"
+                />
+              </>
+            ) : (
+              <>
+                <label style={styles.label}>Texto do preço</label>
+                <input
+                  style={styles.input}
+                  value={precoTexto}
+                  onChange={(e) => setPrecoTexto(e.target.value)}
+                  placeholder="Preço sob consulta"
+                />
+              </>
+            )}
+
+            <label style={styles.label}>Tipo de comissão</label>
+            <select
+              style={styles.input}
+              value={comissaoTipo}
+              onChange={(e) => setComissaoTipo(e.target.value as "percentagem" | "fixa")}
+            >
+              <option value="percentagem">Percentagem</option>
+              <option value="fixa">Valor fixo</option>
+            </select>
+
+            <label style={styles.label}>
+              {comissaoTipo === "percentagem" ? "Comissão (%)" : "Comissão fixa (€)"}
+            </label>
             <input
               style={styles.input}
-              value={preco}
-              onChange={(e) => setPreco(e.target.value)}
-              placeholder="10.00"
+              value={comissaoValor}
+              onChange={(e) => setComissaoValor(e.target.value)}
+              placeholder={comissaoTipo === "percentagem" ? "40" : "10.00"}
             />
 
             <label style={styles.label}>Imagem (upload)</label>
@@ -332,9 +499,18 @@ export default function AdminLojaPage() {
                 <div key={s.id} style={styles.item}>
                   <img src={s.imagem_url} alt={s.nome} style={styles.avatar} />
 
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
                     <div style={styles.itemName}>{s.nome}</div>
-                    <div style={styles.small}>{Number(s.preco_eur ?? 0).toFixed(2)}€</div>
+                    <div style={styles.small}>Preço: {renderPreco(s)}</div>
+                    <div style={styles.small}>
+                      Consultora: {s.consultor_nome || `#${s.consultor_id ?? "-"}`}
+                    </div>
+                    <div style={styles.small}>
+                      Comissão:{" "}
+                      {s.comissao_tipo === "fixa"
+                        ? `${Number(s.comissao_valor ?? 0).toFixed(2)}€`
+                        : `${Number(s.comissao_valor ?? 0).toFixed(0)}%`}
+                    </div>
                     <div style={styles.small}>
                       {s.ativo === 1 ? "Ativo" : "Inativo"}
                     </div>
@@ -370,7 +546,14 @@ export default function AdminLojaPage() {
                     style={styles.btnSmall}
                     onClick={() => {
                       setEdit({ ...s });
+                      setEditConsultorId(String(s.consultor_id ?? ""));
+                      setEditPrecoTipo((s.preco_tipo ?? "fixo") as "fixo" | "sob_consulta");
                       setEditPreco(String(Number(s.preco_eur ?? 0)));
+                      setEditPrecoTexto(s.preco_texto || "Preço sob consulta");
+                      setEditComissaoTipo(
+                        (s.comissao_tipo ?? "percentagem") as "percentagem" | "fixa"
+                      );
+                      setEditComissaoValor(String(Number(s.comissao_valor ?? 40)));
                     }}
                   >
                     Editar
@@ -402,13 +585,73 @@ export default function AdminLojaPage() {
                 onChange={(e) => setEdit({ ...edit, descricao: e.target.value })}
               />
 
-              <label style={styles.label}>Preço (€)</label>
-              <input
-                type="text"
-                inputMode="decimal"
+              <label style={styles.label}>Consultora responsável</label>
+              <select
                 style={styles.input}
-                value={editPreco}
-                onChange={(e) => setEditPreco(e.target.value)}
+                value={editConsultorId}
+                onChange={(e) => setEditConsultorId(e.target.value)}
+              >
+                <option value="">Escolhe a consultora</option>
+                {consultores.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </select>
+
+              <label style={styles.label}>Tipo de preço</label>
+              <select
+                style={styles.input}
+                value={editPrecoTipo}
+                onChange={(e) =>
+                  setEditPrecoTipo(e.target.value as "fixo" | "sob_consulta")
+                }
+              >
+                <option value="fixo">Preço fixo</option>
+                <option value="sob_consulta">Preço sob consulta</option>
+              </select>
+
+              {editPrecoTipo === "fixo" ? (
+                <>
+                  <label style={styles.label}>Preço (€)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    style={styles.input}
+                    value={editPreco}
+                    onChange={(e) => setEditPreco(e.target.value)}
+                  />
+                </>
+              ) : (
+                <>
+                  <label style={styles.label}>Texto do preço</label>
+                  <input
+                    style={styles.input}
+                    value={editPrecoTexto}
+                    onChange={(e) => setEditPrecoTexto(e.target.value)}
+                  />
+                </>
+              )}
+
+              <label style={styles.label}>Tipo de comissão</label>
+              <select
+                style={styles.input}
+                value={editComissaoTipo}
+                onChange={(e) =>
+                  setEditComissaoTipo(e.target.value as "percentagem" | "fixa")
+                }
+              >
+                <option value="percentagem">Percentagem</option>
+                <option value="fixa">Valor fixo</option>
+              </select>
+
+              <label style={styles.label}>
+                {editComissaoTipo === "percentagem" ? "Comissão (%)" : "Comissão fixa (€)"}
+              </label>
+              <input
+                style={styles.input}
+                value={editComissaoValor}
+                onChange={(e) => setEditComissaoValor(e.target.value)}
               />
 
               <label style={styles.label}>Imagem (upload)</label>
@@ -482,6 +725,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "baseline",
     justifyContent: "space-between",
     gap: 12,
+    flexWrap: "wrap",
   },
   h1: { fontSize: 28, margin: 0 },
   stats: { display: "flex", gap: 16, opacity: 0.9, flexWrap: "wrap" },
@@ -628,7 +872,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     opacity: 0.75,
     marginTop: 4,
-    wordBreak: "break-all",
+    wordBreak: "break-word",
   },
   badge: {
     padding: "6px 10px",
@@ -655,6 +899,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     gap: 12,
     alignItems: "center",
+    flexWrap: "wrap",
   },
   checkboxRow: {
     display: "flex",
@@ -670,6 +915,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
+    zIndex: 999,
   },
   modal: {
     width: "min(720px, 96vw)",
@@ -677,11 +923,14 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.14)",
     background: "rgba(10,10,10,0.92)",
     padding: 16,
+    maxHeight: "90vh",
+    overflowY: "auto",
   },
   modalBtns: {
     display: "flex",
     gap: 10,
     justifyContent: "flex-end",
     marginTop: 8,
+    flexWrap: "wrap",
   },
 };

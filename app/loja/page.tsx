@@ -6,25 +6,42 @@ type Servico = {
   id: number;
   nome: string;
   descricao: string;
+  preco_tipo: "fixo" | "sob_consulta";
   preco_eur: number;
+  preco_texto: string | null;
   imagem_url: string;
   ativo: number;
+  consultor_id: number | null;
+  consultor_nome: string | null;
 };
+
+function renderPreco(servico: Servico) {
+  if (servico.preco_tipo === "sob_consulta") {
+    return servico.preco_texto?.trim() || "Preço sob consulta";
+  }
+
+  return `${Number(servico.preco_eur ?? 0).toFixed(2)}€`;
+}
 
 export default function LojaPage() {
   const servicos = db
     .prepare(
       `
       SELECT
-        id,
-        nome,
-        descricao,
-        preco_eur,
-        imagem_url,
-        ativo
-      FROM servicos
-      WHERE ativo = 1
-      ORDER BY id DESC
+        s.id,
+        s.nome,
+        s.descricao,
+        s.preco_tipo,
+        s.preco_eur,
+        s.preco_texto,
+        s.imagem_url,
+        s.ativo,
+        s.consultor_id,
+        c.nome AS consultor_nome
+      FROM servicos s
+      LEFT JOIN consultores c ON c.id = s.consultor_id
+      WHERE s.ativo = 1
+      ORDER BY s.id DESC
       `
     )
     .all() as Servico[];
@@ -36,8 +53,9 @@ export default function LojaPage() {
           <div style={styles.kicker}>SacraLuna</div>
           <h1 style={styles.h1}>Serviços espirituais</h1>
           <p style={styles.sub}>
-            Escolhe o serviço que melhor se adapta ao que procuras. Após o pagamento,
-            entrarei em contacto contigo para realizar o serviço com cuidado, descrição e intenção.
+            Escolhe o serviço mais adequado ao que procuras. Cada trabalho está
+            associado a uma consultora específica para que saibas exatamente quem
+            o irá realizar.
           </p>
         </div>
 
@@ -48,35 +66,75 @@ export default function LojaPage() {
           </div>
         ) : (
           <div style={styles.grid}>
-            {servicos.map((s) => (
-              <article key={s.id} style={styles.card}>
-                <div style={styles.imageWrap}>
-                  <img
-                    src={s.imagem_url || "/servicos/default.jpg"}
-                    alt={s.nome}
-                    style={styles.image}
-                  />
-                </div>
+            {servicos.map((s) => {
+              const isSobConsulta = s.preco_tipo === "sob_consulta";
+              const consultoraNome = s.consultor_nome?.trim() || "Consultora SacraLuna";
 
-                <div style={styles.cardBody}>
-                  <div style={styles.priceBadge}>
-                    {Number(s.preco_eur ?? 0).toFixed(2)}€
+              return (
+                <article key={s.id} style={styles.card}>
+                  <div style={styles.imageWrap}>
+                    <img
+                      src={s.imagem_url || "/servicos/default.jpg"}
+                      alt={s.nome}
+                      style={styles.image}
+                    />
                   </div>
 
-                  <h2 style={styles.cardTitle}>{s.nome}</h2>
+                  <div style={styles.cardBody}>
+                    <div
+                      style={
+                        isSobConsulta ? styles.priceBadgeConsult : styles.priceBadge
+                      }
+                    >
+                      {renderPreco(s)}
+                    </div>
 
-                  <p style={styles.cardDesc}>
-                    {s.descricao || "Sem descrição disponível."}
-                  </p>
+                    <h2 style={styles.cardTitle}>{s.nome}</h2>
 
-                  <div style={styles.actions}>
-                    <Link href={`/loja/${s.id}`} style={styles.buyBtn}>
-                      Comprar serviço
-                    </Link>
+                    <div style={styles.consultoraBox}>
+                      <span style={styles.consultoraLabel}>Será realizado por:</span>
+                      <span style={styles.consultoraName}>{consultoraNome}</span>
+                    </div>
+
+                    <p style={styles.cardDesc}>
+                      {s.descricao || "Sem descrição disponível."}
+                    </p>
+
+                    <div style={styles.actions}>
+                      {isSobConsulta ? (
+                        <>
+                          {s.consultor_id ? (
+                            <>
+                              <Link
+                                href={`/consultores/${s.consultor_id}`}
+                                style={styles.secondaryBtn}
+                              >
+                                Ver consultora
+                              </Link>
+
+                              <Link
+                                href={`/consultores/${s.consultor_id}`}
+                                style={styles.buyBtn}
+                              >
+                                Consultar primeiro
+                              </Link>
+                            </>
+                          ) : (
+                            <span style={styles.mutedWarning}>
+                              Consultora não definida
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <Link href={`/loja/${s.id}`} style={styles.buyBtn}>
+                          Comprar serviço
+                        </Link>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
@@ -121,7 +179,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   sub: {
-    maxWidth: 780,
+    maxWidth: 820,
     margin: "0 auto",
     lineHeight: 1.7,
     opacity: 0.9,
@@ -160,13 +218,14 @@ const styles: Record<string, React.CSSProperties> = {
     position: "relative",
     borderRadius: 24,
     overflow: "hidden",
-    background: "linear-gradient(180deg, rgba(10,10,18,0.88) 0%, rgba(22,18,10,0.82) 100%)",
+    background:
+      "linear-gradient(180deg, rgba(10,10,18,0.88) 0%, rgba(22,18,10,0.82) 100%)",
     border: "1px solid rgba(212,175,55,0.18)",
     boxShadow: "0 18px 36px rgba(0,0,0,0.28)",
     display: "flex",
     flexDirection: "column",
     width: "100%",
-    minHeight: 500,
+    minHeight: 560,
   },
 
   imageWrap: {
@@ -206,12 +265,44 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 16,
   },
 
+  priceBadgeConsult: {
+    width: "fit-content",
+    padding: "8px 12px",
+    borderRadius: 999,
+    background: "rgba(140,180,255,0.12)",
+    border: "1px solid rgba(140,180,255,0.35)",
+    color: "#dce8ff",
+    fontWeight: 900,
+    fontSize: 16,
+  },
+
   cardTitle: {
     margin: 0,
     fontSize: "clamp(22px, 4vw, 24px)",
     fontWeight: 950,
     color: "#ffffff",
     lineHeight: 1.15,
+  },
+
+  consultoraBox: {
+    display: "grid",
+    gap: 4,
+    padding: "10px 12px",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+
+  consultoraLabel: {
+    fontSize: 12,
+    opacity: 0.75,
+    fontWeight: 700,
+  },
+
+  consultoraName: {
+    fontSize: 15,
+    fontWeight: 900,
+    color: "#f4d78b",
   },
 
   cardDesc: {
@@ -229,6 +320,8 @@ const styles: Record<string, React.CSSProperties> = {
   actions: {
     display: "flex",
     justifyContent: "flex-start",
+    gap: 10,
+    flexWrap: "wrap",
     marginTop: "auto",
     paddingTop: 6,
   },
@@ -248,5 +341,25 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: "nowrap",
     fontSize: 15,
     boxShadow: "0 10px 20px rgba(0,0,0,0.18)",
+  },
+
+  secondaryBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "13px 18px",
+    borderRadius: 14,
+    textDecoration: "none",
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.06)",
+    color: "#fff",
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+    fontSize: 15,
+  },
+
+  mutedWarning: {
+    opacity: 0.7,
+    fontSize: 13,
   },
 };
