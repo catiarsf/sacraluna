@@ -147,9 +147,14 @@ CREATE TABLE IF NOT EXISTS stripe_events (
 
 CREATE TABLE IF NOT EXISTS servicos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  consultor_id INTEGER,
   nome TEXT NOT NULL,
   descricao TEXT,
+  preco_tipo TEXT NOT NULL DEFAULT 'fixo',
   preco_eur REAL NOT NULL DEFAULT 0,
+  preco_texto TEXT,
+  comissao_tipo TEXT NOT NULL DEFAULT 'percentagem',
+  comissao_valor REAL NOT NULL DEFAULT 40,
   imagem_url TEXT,
   ativo INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
@@ -247,6 +252,13 @@ try { db.exec(`ALTER TABLE call_sessions ADD COLUMN billed INTEGER NOT NULL DEFA
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN recording_url TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN started_at INTEGER;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN ended_at INTEGER;`); } catch {}
+
+/* MIGRAÇÕES SERVIÇOS */
+try { db.exec(`ALTER TABLE servicos ADD COLUMN consultor_id INTEGER;`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN preco_tipo TEXT NOT NULL DEFAULT 'fixo';`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN preco_texto TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN comissao_tipo TEXT NOT NULL DEFAULT 'percentagem';`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN comissao_valor REAL NOT NULL DEFAULT 40;`); } catch {}
 
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
