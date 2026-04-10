@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 type Consultor = {
   id: number;
@@ -48,6 +48,7 @@ function getPrecoVoz(c: any): number {
 export default function ConsultorPerfilPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const idStr = useMemo(() => {
     const raw = (params as any)?.id;
@@ -56,12 +57,34 @@ export default function ConsultorPerfilPage() {
 
   const idNum = Number(idStr);
 
+  const acao = useMemo(
+    () => String(searchParams.get("acao") || "").trim().toLowerCase(),
+    [searchParams]
+  );
+
+  const origem = useMemo(
+    () => String(searchParams.get("origem") || "").trim().toLowerCase(),
+    [searchParams]
+  );
+
+  const servicoId = useMemo(() => {
+    const raw = searchParams.get("servico");
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  }, [searchParams]);
+
+  const veioDaLoja = origem === "loja";
+  const acaoChat = acao === "chat";
+  const acaoEmail = acao === "email";
+
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [consultor, setConsultor] = useState<Consultor | null>(null);
 
   const [creatingChat, setCreatingChat] = useState(false);
   const [waitingText, setWaitingText] = useState<string | null>(null);
+
+  const [servicoNome, setServicoNome] = useState<string>("");
 
   useEffect(() => {
     if (!idStr || !Number.isFinite(idNum) || idNum <= 0) {
@@ -84,6 +107,59 @@ export default function ConsultorPerfilPage() {
       .finally(() => setLoading(false));
   }, [idStr, idNum]);
 
+  useEffect(() => {
+    let ativo = true;
+
+    async function carregarServico() {
+      if (!veioDaLoja || !servicoId) {
+        setServicoNome("");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/loja/servico-context", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            servico_id: servicoId,
+          }),
+        });
+
+        const json = await res.json().catch(() => null);
+
+        if (!res.ok || !json?.ok) return;
+        if (!ativo) return;
+
+        setServicoNome(String(json?.servico?.nome ?? ""));
+      } catch {
+        // silencioso
+      }
+    }
+
+    carregarServico();
+
+    return () => {
+      ativo = false;
+    };
+  }, [veioDaLoja, servicoId]);
+
+  useEffect(() => {
+    if (!consultor) return;
+    if (!veioDaLoja) return;
+    if (!acaoChat) return;
+
+    const timer = setTimeout(() => {
+      const el = document.getElementById("bloco-acoes-consultora");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [consultor, veioDaLoja, acaoChat]);
+
   const foto = normalizeFotoUrl(consultor?.foto_url ?? null);
 
   const textoApresentacao = useMemo(() => {
@@ -99,18 +175,18 @@ export default function ConsultorPerfilPage() {
   const statusText = !ativo
     ? "Indisponível"
     : !online
-      ? "Offline"
-      : ocupado
-        ? "Ocupado"
-        : "Disponível";
+    ? "Offline"
+    : ocupado
+    ? "Ocupado"
+    : "Disponível";
 
   const statusColor = !ativo
     ? "#ff7b7b"
     : !online
-      ? "#c7c7c7"
-      : ocupado
-        ? "#ffd36b"
-        : "#88ffbc";
+    ? "#c7c7c7"
+    : ocupado
+    ? "#ffd36b"
+    : "#88ffbc";
 
   async function iniciarPedidoChat() {
     if (!consultor) return;
@@ -243,6 +319,14 @@ export default function ConsultorPerfilPage() {
     }
   }
 
+  function irParaEmail() {
+    if (!consultor) return;
+    router.push(`/consultores/${consultor.id}?origem=loja&servico=${servicoId || ""}`);
+    alert(
+      "Para pedidos sob consulta, usa preferencialmente o chat com a consultora. Se ela estiver indisponível, podes voltar mais tarde ou contactar pelos meios disponíveis no site."
+    );
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.wrap}>
@@ -260,107 +344,151 @@ export default function ConsultorPerfilPage() {
         )}
 
         {!loading && !err && consultor && (
-          <div style={styles.card}>
-            {Number(consultor.destaque ?? 0) === 1 ? (
-              <div style={styles.featureBadge}>★ Consultora em destaque</div>
-            ) : null}
+          <>
+            {veioDaLoja ? (
+              <div style={styles.origemBox}>
+                <div style={styles.origemLabel}>Pedido vindo da loja</div>
 
-            <div style={styles.left}>
-              <div style={styles.imageFrame}>
-                <div style={styles.imageBox}>
-                  {foto ? (
-                    <img src={foto} alt={consultor.nome} style={styles.image} />
+                <div style={styles.origemText}>
+                  {servicoNome ? (
+                    <>
+                      Estás a falar com <b>{consultor.nome}</b> por causa do serviço{" "}
+                      <b>{servicoNome}</b>.
+                    </>
                   ) : (
-                    <div style={styles.placeholder}>🌙 Sem foto</div>
+                    <>
+                      Estás a falar com <b>{consultor.nome}</b> por causa de um serviço
+                      da loja.
+                    </>
                   )}
                 </div>
+
+                {acaoChat ? (
+                  <div style={styles.origemHint}>
+                    O próximo passo recomendado é iniciares o chat para pedir orçamento
+                    ou esclarecer detalhes antes do trabalho.
+                  </div>
+                ) : null}
+
+                {acaoEmail ? (
+                  <div style={styles.origemHint}>
+                    Vieste para pedir informações antes do serviço. Se a consultora
+                    estiver disponível, o chat costuma ser o caminho mais rápido.
+                  </div>
+                ) : null}
               </div>
-            </div>
+            ) : null}
 
-            <div style={styles.right}>
-              <div style={styles.topHeader}>
-                <h2 style={styles.name}>{consultor.nome}</h2>
+            <div style={styles.card}>
+              {Number(consultor.destaque ?? 0) === 1 ? (
+                <div style={styles.featureBadge}>★ Consultora em destaque</div>
+              ) : null}
 
-                <div style={{ ...styles.status, color: statusColor }}>
-                  {statusText}
+              <div style={styles.left}>
+                <div style={styles.imageFrame}>
+                  <div style={styles.imageBox}>
+                    {foto ? (
+                      <img src={foto} alt={consultor.nome} style={styles.image} />
+                    ) : (
+                      <div style={styles.placeholder}>🌙 Sem foto</div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div style={styles.pricesWrap}>
-                <div style={styles.priceCard}>
-                  <div style={styles.priceLabel}>CHAT</div>
-                  <div style={styles.priceRow}>
-                    <span style={styles.priceValue}>
-                      {getPrecoChat(consultor).toFixed(2)}€
-                    </span>
-                    <span style={styles.priceUnit}>/min</span>
+              <div style={styles.right}>
+                <div style={styles.topHeader}>
+                  <h2 style={styles.name}>{consultor.nome}</h2>
+
+                  <div style={{ ...styles.status, color: statusColor }}>
+                    {statusText}
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    ...styles.priceCard,
-                    ...(voipAtivo ? null : styles.priceCardDisabled),
-                  }}
-                >
-                  <div
-                    style={{
-                      ...styles.priceLabel,
-                      ...(voipAtivo ? null : styles.priceLabelDisabled),
-                    }}
-                  >
-                    VOZ
-                  </div>
-
-                  {voipAtivo ? (
+                <div style={styles.pricesWrap}>
+                  <div style={styles.priceCard}>
+                    <div style={styles.priceLabel}>CHAT</div>
                     <div style={styles.priceRow}>
                       <span style={styles.priceValue}>
-                        {getPrecoVoz(consultor).toFixed(2)}€
+                        {getPrecoChat(consultor).toFixed(2)}€
                       </span>
                       <span style={styles.priceUnit}>/min</span>
                     </div>
-                  ) : (
-                    <div style={styles.voipOffText}>Indisponível</div>
-                  )}
+                  </div>
+
+                  <div
+                    style={{
+                      ...styles.priceCard,
+                      ...(voipAtivo ? null : styles.priceCardDisabled),
+                    }}
+                  >
+                    <div
+                      style={{
+                        ...styles.priceLabel,
+                        ...(voipAtivo ? null : styles.priceLabelDisabled),
+                      }}
+                    >
+                      VOZ
+                    </div>
+
+                    {voipAtivo ? (
+                      <div style={styles.priceRow}>
+                        <span style={styles.priceValue}>
+                          {getPrecoVoz(consultor).toFixed(2)}€
+                        </span>
+                        <span style={styles.priceUnit}>/min</span>
+                      </div>
+                    ) : (
+                      <div style={styles.voipOffText}>Indisponível</div>
+                    )}
+                  </div>
                 </div>
+
+                {consultor.especialidades ? (
+                  <div style={styles.spec}>{consultor.especialidades}</div>
+                ) : null}
+
+                {waitingText ? (
+                  <div style={styles.waitingBox}>{waitingText}</div>
+                ) : null}
+
+                <div id="bloco-acoes-consultora" style={styles.btns}>
+                  <button
+                    style={acaoChat ? styles.btnGoldStrong : styles.btnGold}
+                    onClick={iniciarPedidoChat}
+                    disabled={creatingChat}
+                  >
+                    {creatingChat ? "AGUARDA..." : veioDaLoja && acaoChat ? "Pedir orçamento no Chat" : "Iniciar Chat"}
+                  </button>
+
+                  <button
+                    style={voipAtivo ? styles.btnBlue : styles.btnBlueDisabled}
+                    onClick={iniciarChamadaVoz}
+                    disabled={!voipAtivo}
+                  >
+                    Chamada de Voz
+                  </button>
+                </div>
+
+                {veioDaLoja && acaoEmail ? (
+                  <div style={styles.extraActions}>
+                    <button style={styles.btnGhost} onClick={irParaEmail}>
+                      Quero orientação antes do serviço
+                    </button>
+                  </div>
+                ) : null}
+
+                <div style={styles.sep} />
+
+                <h3 style={styles.h3}>Apresentação</h3>
+                <p style={styles.p}>
+                  {textoApresentacao
+                    ? textoApresentacao
+                    : "(Ainda sem apresentação.)"}
+                </p>
               </div>
-
-              {consultor.especialidades ? (
-                <div style={styles.spec}>{consultor.especialidades}</div>
-              ) : null}
-
-              {waitingText ? (
-                <div style={styles.waitingBox}>{waitingText}</div>
-              ) : null}
-
-              <div style={styles.btns}>
-                <button
-                  style={styles.btnGold}
-                  onClick={iniciarPedidoChat}
-                  disabled={creatingChat}
-                >
-                  {creatingChat ? "AGUARDA..." : "Iniciar Chat"}
-                </button>
-
-                <button
-                  style={voipAtivo ? styles.btnBlue : styles.btnBlueDisabled}
-                  onClick={iniciarChamadaVoz}
-                  disabled={!voipAtivo}
-                >
-                  Chamada de Voz
-                </button>
-              </div>
-
-              <div style={styles.sep} />
-
-              <h3 style={styles.h3}>Apresentação</h3>
-              <p style={styles.p}>
-                {textoApresentacao
-                  ? textoApresentacao
-                  : "(Ainda sem apresentação.)"}
-              </p>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
@@ -393,6 +521,40 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     marginBottom: 18,
     boxShadow: "0 10px 22px rgba(0,0,0,0.18)",
+  },
+
+  origemBox: {
+    marginBottom: 18,
+    borderRadius: 18,
+    border: "1px solid rgba(212,175,55,0.28)",
+    background: "rgba(0,0,0,0.28)",
+    padding: 16,
+    boxShadow: "0 10px 24px rgba(0,0,0,0.18)",
+  },
+
+  origemLabel: {
+    fontSize: 12,
+    fontWeight: 900,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: "#f4d78b",
+    marginBottom: 8,
+  },
+
+  origemText: {
+    lineHeight: 1.6,
+    opacity: 0.95,
+  },
+
+  origemHint: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#dce8ff",
+    lineHeight: 1.6,
+    background: "rgba(26,63,130,0.28)",
+    border: "1px solid rgba(140,180,255,0.18)",
+    borderRadius: 12,
+    padding: "10px 12px",
   },
 
   errBox: {
@@ -604,6 +766,20 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 10px 20px rgba(0,0,0,0.22)",
   },
 
+  btnGoldStrong: {
+    padding: "14px 14px",
+    borderRadius: 16,
+    border: "1px solid rgba(255,227,148,1)",
+    background:
+      "linear-gradient(180deg, rgba(255,236,170,1) 0%, rgba(212,175,55,1) 100%)",
+    color: "#111",
+    fontWeight: 950,
+    fontSize: 14,
+    letterSpacing: 0.4,
+    cursor: "pointer",
+    boxShadow: "0 0 0 2px rgba(255,227,148,0.18), 0 10px 22px rgba(0,0,0,0.24)",
+  },
+
   btnBlue: {
     padding: "14px 14px",
     borderRadius: 16,
@@ -629,6 +805,23 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.4,
     cursor: "not-allowed",
     opacity: 0.78,
+  },
+
+  extraActions: {
+    marginTop: 12,
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  btnGhost: {
+    padding: "12px 14px",
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
   },
 
   sep: {
