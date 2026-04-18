@@ -85,6 +85,7 @@ export default function ConsultorPerfilPage() {
   const [waitingText, setWaitingText] = useState<string | null>(null);
 
   const [servicoNome, setServicoNome] = useState<string>("");
+  const [callingVoice, setCallingVoice] = useState(false);
 
   useEffect(() => {
     if (!idStr || !Number.isFinite(idNum) || idNum <= 0) {
@@ -133,9 +134,7 @@ export default function ConsultorPerfilPage() {
         if (!ativo) return;
 
         setServicoNome(String(json?.servico?.nome ?? ""));
-      } catch {
-        // silencioso
-      }
+      } catch {}
     }
 
     carregarServico();
@@ -296,6 +295,8 @@ export default function ConsultorPerfilPage() {
     }
 
     try {
+      setCallingVoice(true);
+
       const res = await fetch("/api/twilio/call", {
         method: "POST",
         headers: {
@@ -316,6 +317,8 @@ export default function ConsultorPerfilPage() {
       alert("A chamada está a ser iniciada. A consultora será contactada primeiro.");
     } catch {
       alert("Erro ao iniciar chamada.");
+    } finally {
+      setCallingVoice(false);
     }
   }
 
@@ -458,15 +461,19 @@ export default function ConsultorPerfilPage() {
                     onClick={iniciarPedidoChat}
                     disabled={creatingChat}
                   >
-                    {creatingChat ? "AGUARDA..." : veioDaLoja && acaoChat ? "Pedir orçamento no Chat" : "Iniciar Chat"}
+                    {creatingChat
+                      ? "AGUARDA..."
+                      : veioDaLoja && acaoChat
+                      ? "Pedir orçamento no Chat"
+                      : "Iniciar Chat"}
                   </button>
 
                   <button
                     style={voipAtivo ? styles.btnBlue : styles.btnBlueDisabled}
                     onClick={iniciarChamadaVoz}
-                    disabled={!voipAtivo}
+                    disabled={!voipAtivo || callingVoice}
                   >
-                    Chamada de Voz
+                    {callingVoice ? "A LIGAR..." : "Chamada de Voz"}
                   </button>
                 </div>
 

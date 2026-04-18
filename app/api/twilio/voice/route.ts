@@ -3,6 +3,13 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 
+function xml(text: string) {
+  return new NextResponse(text, {
+    headers: { "Content-Type": "text/xml; charset=utf-8" },
+    status: 200,
+  });
+}
+
 export async function POST(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -11,56 +18,80 @@ export async function POST(req: Request) {
     const clienteId = Number(searchParams.get("clienteId") || 0);
     const callSessionId = String(searchParams.get("callSessionId") || "").trim();
 
-    if (!consultorId) {
-      return new NextResponse("Consultor inválido", { status: 400 });
+    if (!consultorId || !clienteId || !callSessionId) {
+      return xml(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-PT">Dados da chamada inválidos.</Say>
+  <Hangup/>
+</Response>`);
     }
 
-    // 🔍 buscar telefone real do consultor
-    const consultor = db.prepare(`
-      SELECT id, telefone
-      FROM consultores
-      WHERE id = ?
-      LIMIT 1
-    `).get(consultorId) as any;
+    const cliente = db
+      .prepare(
+        `
+        SELECT id, nome, telefone
+        FROM users
+        WHERE id = ? AND role = 'cliente'
+        LIMIT 1
+        `
+      )
+      .get(clienteId) as any;
 
-    if (!consultor || !consultor.telefone) {
-      return new NextResponse("Consultor sem telefone", { status: 400 });
+    if (!cliente?.telefone) {
+      return xml(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-PT">O número do cliente não está disponível.</Say>
+  <Hangup/>
+</Response>`);
     }
 
-    const numero = String(consultor.telefone);
+    const clienteNome = String(cliente.nome || "Cliente");
+    const clienteTelefone = String(cliente.telefone || "").trim();
+
+    if (!clienteTelefone.startsWith("+")) {
+      return xml(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-PT">O número do cliente não está válido.</Say>
+  <Hangup/>
+</Response>`);
+    }
 
     const statusCallback =
       `${process.env.NEXT_PUBLIC_SITE_URL}/api/twilio/status` +
       `?consultorId=${consultorId}` +
-      `&callSessionId=${callSessionId}`;
+      `&clienteId=${clienteId}` +
+      `&callSessionId=${encodeURIComponent(callSessionId)}`;
 
     const recordingCallback =
       `${process.env.NEXT_PUBLIC_SITE_URL}/api/twilio/status` +
       `?consultorId=${consultorId}` +
-      `&callSessionId=${callSessionId}`;
+      `&clienteId=${clienteId}` +
+      `&callSessionId=${encodeURIComponent(callSessionId)}`;
 
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice">A ligar ao consultor. Aguarde.</Say>
-
+  <Say language="pt-PT">Nova consulta da plataforma Sacraluna.</Say>
+  <Say language="pt-PT">A ligar ao cliente ${clienteNome}.</Say>
   <Dial
+    answerOnBridge="true"
     record="record-from-answer"
     recordingStatusCallback="${recordingCallback}"
     recordingStatusCallbackMethod="POST"
     action="${statusCallback}"
     method="POST"
   >
-    ${numero}
+    ${clienteTelefone}
   </Dial>
-
 </Response>`;
 
-    return new NextResponse(twiml, {
-      headers: { "Content-Type": "text/xml" },
-    });
+    return xml(twiml);
   } catch (e: any) {
-    console.error("ERRO VOICE:", e);
+    console.error("ERRO /api/twilio/voice:", e);
 
-    return new NextResponse("Erro interno", { status: 500 });
+    return xml(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-PT">Erro ao estabelecer a chamada.</Say>
+  <Hangup/>
+</Response>`);
   }
 }
