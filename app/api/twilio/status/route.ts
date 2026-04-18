@@ -30,227 +30,216 @@ export async function POST(req: Request) {
 
     const now = Math.floor(Date.now() / 1000);
 
-    if (callSessionId) {
-      const existing = db
-        .prepare(
-          `
-          SELECT *
-          FROM call_sessions
-          WHERE id = ?
-          LIMIT 1
-          `
-        )
-        .get(callSessionId) as any;
+    if (!callSessionId) {
+      return NextResponse.json({ ok: true });
+    }
 
-      if (existing) {
-        if (callStatus === "answered" && !existing.started_at) {
-          db.prepare(
-            `
-            UPDATE call_sessions
-            SET
-              status = ?,
-              started_at = ?,
-              call_sid = CASE WHEN ? <> '' THEN ? ELSE call_sid END
-            WHERE id = ?
-            `
-          ).run(callStatus, now, callSid, callSid, callSessionId);
-        } else if (
-          callStatus === "completed" ||
-          callStatus === "busy" ||
-          callStatus === "no-answer" ||
-          callStatus === "failed" ||
-          callStatus === "canceled"
+    const existing = db
+      .prepare(`SELECT * FROM call_sessions WHERE id = ? LIMIT 1`)
+      .get(callSessionId) as any;
+
+    if (!existing) {
+      return NextResponse.json({ ok: true });
+    }
+
+    if (existing.status === "completed" && Number(existing.billed ?? 0) === 1) {
+      return NextResponse.json({ ok: true });
+    }
+
+    if (callStatus === "answered" && !existing.started_at) {
+      db.prepare(
+        `
+        UPDATE call_sessions
+        SET
+          status = 'active',
+          started_at = ?,
+          call_sid = CASE WHEN ? <> '' THEN ? ELSE call_sid END
+        WHERE id = ?
+        `
+      ).run(now, callSid, callSid, callSessionId);
+
+      return NextResponse.json({ ok: true });
+    }
+
+    if (
+      ["completed", "busy", "no-answer", "failed", "canceled"].includes(callStatus)
+    ) {
+      db.transaction(() => {
+        db.prepare(
+          `
+          UPDATE call_sessions
+          SET
+            status = ?,
+            ended_at = ?,
+            duration_seconds = CASE WHEN ? > 0 THEN ? ELSE duration_seconds END,
+            recording_url = CASE WHEN ? <> '' THEN ? ELSE recording_url END,
+            call_sid = CASE WHEN ? <> '' THEN ? ELSE call_sid END
+          WHERE id = ?
+          `
+        ).run(
+          callStatus,
+          now,
+          callDuration,
+          callDuration,
+          recordingUrl,
+          recordingUrl,
+          callSid,
+          callSid,
+          callSessionId
+        );
+
+        const fresh = db
+          .prepare(`SELECT * FROM call_sessions WHERE id = ?`)
+          .get(callSessionId) as any;
+
+        const alreadyBilled = Number(fresh?.billed ?? 0) === 1;
+
+        if (
+          callStatus === "completed" &&
+          !alreadyBilled &&
+          callDuration > 0 &&
+          fresh?.cliente_id &&
+          fresh?.consultor_id
         ) {
-          db.transaction(() => {
+          const consultor = db
+            .prepare(
+              `
+              SELECT percentagem_ganho
+              FROM consultores
+              WHERE id = ?
+              `
+            )
+            .get(fresh.consultor_id) as any;
+
+          const percentagem = round2(Number(consultor?.percentagem_ganho ?? 40));
+          const pricePerMin = round2(Number(fresh.price_per_min ?? 0));
+
+          const totalCharged = round2((callDuration / 60) * pricePerMin);
+
+          const clienteWallet = db
+            .prepare(
+              `
+              SELECT *
+              FROM wallets
+              WHERE user_type = 'cliente' AND user_id = ?
+              `
+            )
+            .get(fresh.cliente_id) as any;
+
+          const consultorWallet = db
+            .prepare(
+              `
+              SELECT *
+              FROM wallets
+              WHERE user_type = 'consultor' AND user_id = ?
+              `
+            )
+            .get(fresh.consultor_id) as any;
+
+          if (clienteWallet && consultorWallet && totalCharged > 0) {
+            const clientBalance = round2(Number(clienteWallet.balance_eur || 0));
+            const debit = Math.min(clientBalance, totalCharged);
+            const finalConsultorShare = round2(debit * (percentagem / 100));
+
             db.prepare(
               `
-              UPDATE call_sessions
-              SET
-                status = ?,
-                ended_at = ?,
-                duration_seconds = CASE
-                  WHEN ? > 0 THEN ?
-                  ELSE COALESCE(duration_seconds, 0)
-                END,
-                recording_url = CASE
-                  WHEN ? <> '' THEN ?
-                  ELSE recording_url
-                END,
-                call_sid = CASE
-                  WHEN ? <> '' THEN ?
-                  ELSE call_sid
-                END
+              UPDATE wallets
+              SET balance_eur = ?,
+                  spent_eur = spent_eur + ?,
+                  updated_at = strftime('%s','now')
+              WHERE id = ?
+              `
+            ).run(round2(clientBalance - debit), debit, clienteWallet.id);
+
+            db.prepare(
+              `
+              INSERT INTO wallet_transactions (
+                wallet_id, session_id, type, amount_eur, description
+              )
+              VALUES (?, ?, 'debit', ?, ?)
+              `
+            ).run(
+              clienteWallet.id,
+              callSessionId,
+              -debit,
+              "Chamada voz"
+            );
+
+            db.prepare(
+              `
+              UPDATE wallets
+              SET balance_eur = balance_eur + ?,
+                  earned_eur = earned_eur + ?,
+                  updated_at = strftime('%s','now')
               WHERE id = ?
               `
             ).run(
-              callStatus,
-              now,
-              callDuration,
-              callDuration,
-              recordingUrl,
-              recordingUrl,
-              callSid,
-              callSid,
-              callSessionId
+              finalConsultorShare,
+              finalConsultorShare,
+              consultorWallet.id
             );
 
-            const fresh = db
-              .prepare(`SELECT * FROM call_sessions WHERE id = ? LIMIT 1`)
-              .get(callSessionId) as any;
+            db.prepare(
+              `
+              INSERT INTO wallet_transactions (
+                wallet_id, session_id, type, amount_eur, description
+              )
+              VALUES (?, ?, 'consultor_earned', ?, ?)
+              `
+            ).run(
+              consultorWallet.id,
+              callSessionId,
+              finalConsultorShare,
+              "Ganho chamada"
+            );
 
-            const alreadyBilled = Number(fresh?.billed ?? 0) === 1;
+            db.prepare(
+              `
+              UPDATE call_sessions
+              SET billed = 1,
+                  total_charged_eur = ?,
+                  consultor_earned_eur = ?
+              WHERE id = ?
+              `
+            ).run(debit, finalConsultorShare, callSessionId);
+          } else {
+            db.prepare(
+              `
+              UPDATE call_sessions
+              SET billed = 1
+              WHERE id = ?
+              `
+            ).run(callSessionId);
+          }
+        }
 
-            if (
-              callStatus === "completed" &&
-              !alreadyBilled &&
-              Number(callDuration) > 0 &&
-              Number(fresh?.cliente_id ?? 0) > 0 &&
-              Number(fresh?.consultor_id ?? 0) > 0
-            ) {
-              const consultor = db
-                .prepare(
-                  `
-                  SELECT id, percentagem_ganho
-                  FROM consultores
-                  WHERE id = ?
-                  LIMIT 1
-                  `
-                )
-                .get(fresh.consultor_id) as any;
-
-              const percentagem = round2(Number(consultor?.percentagem_ganho ?? 40));
-              const pricePerMin = round2(Number(fresh.price_per_min ?? 0));
-              const totalCharged = round2((Number(callDuration) / 60) * pricePerMin);
-              const consultorShare = round2(totalCharged * (percentagem / 100));
-
-              const clienteWallet = db
-                .prepare(
-                  `
-                  SELECT *
-                  FROM wallets
-                  WHERE user_type = 'cliente' AND user_id = ?
-                  `
-                )
-                .get(fresh.cliente_id) as any;
-
-              const consultorWallet = db
-                .prepare(
-                  `
-                  SELECT *
-                  FROM wallets
-                  WHERE user_type = 'consultor' AND user_id = ?
-                  `
-                )
-                .get(fresh.consultor_id) as any;
-
-              if (clienteWallet && consultorWallet && totalCharged > 0) {
-                const clientBalanceNow = round2(Number(clienteWallet.balance_eur || 0));
-                const debitAmount = Math.min(clientBalanceNow, totalCharged);
-                const finalConsultorShare = round2(debitAmount * (percentagem / 100));
-
-                const newClientBalance = round2(clientBalanceNow - debitAmount);
-                const newClientSpent = round2(Number(clienteWallet.spent_eur || 0) + debitAmount);
-
-                db.prepare(
-                  `
-                  UPDATE wallets
-                  SET balance_eur = ?,
-                      spent_eur = ?,
-                      updated_at = strftime('%s','now')
-                  WHERE id = ?
-                  `
-                ).run(newClientBalance, newClientSpent, clienteWallet.id);
-
-                db.prepare(
-                  `
-                  INSERT INTO wallet_transactions (
-                    wallet_id, session_id, type, amount_eur, description
-                  ) VALUES (?, ?, 'debit', ?, ?)
-                  `
-                ).run(
-                  clienteWallet.id,
-                  callSessionId,
-                  round2(-debitAmount),
-                  `Cobrança chamada ${callSessionId}`
-                );
-
-                const consultorBalanceNow = round2(Number(consultorWallet.balance_eur || 0));
-                const consultorEarnedNow = round2(Number(consultorWallet.earned_eur || 0));
-
-                db.prepare(
-                  `
-                  UPDATE wallets
-                  SET balance_eur = ?,
-                      earned_eur = ?,
-                      updated_at = strftime('%s','now')
-                  WHERE id = ?
-                  `
-                ).run(
-                  round2(consultorBalanceNow + finalConsultorShare),
-                  round2(consultorEarnedNow + finalConsultorShare),
-                  consultorWallet.id
-                );
-
-                db.prepare(
-                  `
-                  INSERT INTO wallet_transactions (
-                    wallet_id, session_id, type, amount_eur, description
-                  ) VALUES (?, ?, 'consultor_earned', ?, ?)
-                  `
-                ).run(
-                  consultorWallet.id,
-                  callSessionId,
-                  finalConsultorShare,
-                  `Ganho do consultor na chamada ${callSessionId}`
-                );
-
-                db.prepare(
-                  `
-                  UPDATE call_sessions
-                  SET total_charged_eur = ?,
-                      consultor_earned_eur = ?,
-                      billed = 1
-                  WHERE id = ?
-                  `
-                ).run(debitAmount, finalConsultorShare, callSessionId);
-              }
-            }
-          })();
-        } else {
+        if (fresh?.consultor_id) {
           db.prepare(
             `
-            UPDATE call_sessions
-            SET
-              status = ?,
-              call_sid = CASE
-                WHEN ? <> '' THEN ?
-                ELSE call_sid
-              END
+            UPDATE consultores
+            SET ocupado = 0,
+                online = 1,
+                last_seen_at = strftime('%s','now')
             WHERE id = ?
             `
-          ).run(callStatus, callSid, callSid, callSessionId);
+          ).run(fresh.consultor_id);
         }
-      }
+      });
     }
 
-    if (consultorId > 0) {
-      if (
-        callStatus === "completed" ||
-        callStatus === "busy" ||
-        callStatus === "no-answer" ||
-        callStatus === "failed" ||
-        callStatus === "canceled"
-      ) {
-        db.prepare(
-          `
-          UPDATE consultores
-          SET ocupado = 0,
-              online = 1,
-              last_seen_at = strftime('%s','now')
-          WHERE id = ?
-          `
-        ).run(consultorId);
-      }
+    if (
+      consultorId > 0 &&
+      ["busy", "no-answer", "failed", "canceled"].includes(callStatus)
+    ) {
+      db.prepare(
+        `
+        UPDATE consultores
+        SET ocupado = 0,
+            online = 1,
+            last_seen_at = strftime('%s','now')
+        WHERE id = ?
+        `
+      ).run(consultorId);
     }
 
     return NextResponse.json({
@@ -262,8 +251,9 @@ export async function POST(req: Request) {
     });
   } catch (e: any) {
     console.error("ERRO TWILIO STATUS:", e);
+
     return NextResponse.json(
-      { ok: false, error: e?.message || "Erro no status da Twilio." },
+      { ok: false, error: e?.message || "Erro no status Twilio" },
       { status: 500 }
     );
   }

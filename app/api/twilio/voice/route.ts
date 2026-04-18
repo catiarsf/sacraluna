@@ -17,6 +17,7 @@ export async function POST(req: Request) {
     const consultorId = Number(searchParams.get("consultorId") || 0);
     const clienteId = Number(searchParams.get("clienteId") || 0);
     const callSessionId = String(searchParams.get("callSessionId") || "").trim();
+    const maxSeconds = Number(searchParams.get("maxSeconds") || 0);
 
     if (!consultorId || !clienteId || !callSessionId) {
       return xml(`<?xml version="1.0" encoding="UTF-8"?>
@@ -68,12 +69,15 @@ export async function POST(req: Request) {
       `&clienteId=${clienteId}` +
       `&callSessionId=${encodeURIComponent(callSessionId)}`;
 
+    const timeLimitAttr =
+      maxSeconds > 0 ? ` timeLimit="${maxSeconds}"` : "";
+
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say language="pt-PT">Nova consulta da plataforma Sacraluna.</Say>
   <Say language="pt-PT">A ligar ao cliente ${clienteNome}.</Say>
   <Dial
-    answerOnBridge="true"
+    answerOnBridge="true"${timeLimitAttr}
     record="record-from-answer"
     recordingStatusCallback="${recordingCallback}"
     recordingStatusCallbackMethod="POST"

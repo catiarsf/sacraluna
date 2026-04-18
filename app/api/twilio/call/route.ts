@@ -9,7 +9,13 @@ function normPhone(v: any) {
   return String(v ?? "").trim().replace(/\s+/g, "");
 }
 
+function round2(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 export async function POST(req: Request) {
+  let callSessionId = "";
+
   try {
     const session = await getSession();
     const user = session?.user;
@@ -49,6 +55,19 @@ export async function POST(req: Request) {
           ok: false,
           error:
             "Faltam variáveis da Twilio ou NEXT_PUBLIC_SITE_URL na Railway.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const fromNumber = normPhone(twilioPhoneNumber);
+
+    if (!fromNumber.startsWith("+")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "TWILIO_PHONE_NUMBER inválido. Tem de estar em formato internacional.",
         },
         { status: 500 }
       );
@@ -147,41 +166,98 @@ export async function POST(req: Request) {
       );
     }
 
-    const callSessionId =
+    const pricePerMin = round2(Number(consultor.preco_voz ?? 0));
+
+    if (pricePerMin <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "Preço de voz inválido para esta consultora." },
+        { status: 400 }
+      );
+    }
+
+    const clienteWallet = db
+      .prepare(
+        `
+        SELECT id, balance_eur
+        FROM wallets
+        WHERE user_type = 'cliente' AND user_id = ?
+        LIMIT 1
+        `
+      )
+      .get(Number(user.id)) as any;
+
+    const saldoCliente = round2(Number(clienteWallet?.balance_eur ?? 0));
+
+    if (saldoCliente <= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Não tens saldo disponível para iniciar a chamada.",
+        },
+        { status: 402 }
+      );
+    }
+
+    const maxSeconds = Math.floor((saldoCliente / pricePerMin) * 60);
+
+    if (maxSeconds < 10) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Saldo insuficiente para uma chamada de voz. Carrega mais saldo antes de continuar.",
+        },
+        { status: 402 }
+      );
+    }
+
+    callSessionId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    const pricePerMin = Number(consultor.preco_voz ?? 0);
+    const now = Math.floor(Date.now() / 1000);
 
-    db.prepare(
-      `
-      INSERT INTO call_sessions (
-        id,
-        consultor_id,
-        cliente_id,
-        cliente_nome,
-        status,
-        call_sid,
-        price_per_min,
-        duration_seconds,
-        total_charged_eur,
-        consultor_earned_eur,
-        billed,
-        recording_url,
-        created_at,
-        started_at,
-        ended_at
-      )
-      VALUES (?, ?, ?, ?, 'initiated', NULL, ?, 0, 0, 0, 0, NULL, strftime('%s','now'), NULL, NULL)
-      `
-    ).run(
-      callSessionId,
-      consultorId,
-      Number(user.id),
-      String(cliente.nome ?? "Cliente"),
-      pricePerMin
-    );
+    db.transaction(() => {
+      db.prepare(
+        `
+        INSERT INTO call_sessions (
+          id,
+          consultor_id,
+          cliente_id,
+          cliente_nome,
+          status,
+          call_sid,
+          price_per_min,
+          duration_seconds,
+          total_charged_eur,
+          consultor_earned_eur,
+          billed,
+          recording_url,
+          created_at,
+          started_at,
+          ended_at
+        )
+        VALUES (?, ?, ?, ?, 'initiated', NULL, ?, 0, 0, 0, 0, NULL, strftime('%s','now'), NULL, NULL)
+        `
+      ).run(
+        callSessionId,
+        consultorId,
+        Number(user.id),
+        String(cliente.nome ?? "Cliente"),
+        pricePerMin
+      );
+
+      db.prepare(
+        `
+        UPDATE consultores
+        SET ocupado = 1,
+            online = 1,
+            last_seen_at = ?
+        WHERE id = ?
+        `
+      ).run(now, consultorId);
+    })();
 
     const client = twilio(accountSid, authToken);
 
@@ -189,7 +265,8 @@ export async function POST(req: Request) {
       `${siteUrl}/api/twilio/voice` +
       `?consultorId=${consultorId}` +
       `&clienteId=${Number(user.id)}` +
-      `&callSessionId=${encodeURIComponent(callSessionId)}`;
+      `&callSessionId=${encodeURIComponent(callSessionId)}` +
+      `&maxSeconds=${maxSeconds}`;
 
     const statusCallbackUrl =
       `${siteUrl}/api/twilio/status` +
@@ -199,7 +276,7 @@ export async function POST(req: Request) {
 
     const call = await client.calls.create({
       to: consultorTelefone,
-      from: twilioPhoneNumber,
+      from: fromNumber,
       url: webhookUrl,
       method: "POST",
       statusCallback: statusCallbackUrl,
@@ -219,9 +296,52 @@ export async function POST(req: Request) {
       ok: true,
       call_sid: call.sid,
       callSessionId,
+      max_seconds: maxSeconds,
+      saldo_eur: saldoCliente,
+      preco_voz_eur_min: pricePerMin,
     });
   } catch (e: any) {
     console.error("ERRO /api/twilio/call:", e);
+
+    if (callSessionId) {
+      try {
+        const row = db
+          .prepare(
+            `
+            SELECT consultor_id
+            FROM call_sessions
+            WHERE id = ?
+            LIMIT 1
+            `
+          )
+          .get(callSessionId) as any;
+
+        db.transaction(() => {
+          db.prepare(
+            `
+            UPDATE call_sessions
+            SET status = 'failed',
+                ended_at = COALESCE(ended_at, strftime('%s','now'))
+            WHERE id = ?
+            `
+          ).run(callSessionId);
+
+          if (row?.consultor_id) {
+            db.prepare(
+              `
+              UPDATE consultores
+              SET ocupado = 0,
+                  online = 1,
+                  last_seen_at = strftime('%s','now')
+              WHERE id = ?
+              `
+            ).run(Number(row.consultor_id));
+          }
+        })();
+      } catch (rollbackError) {
+        console.error("ERRO rollback /api/twilio/call:", rollbackError);
+      }
+    }
 
     return NextResponse.json(
       {
