@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { db, getOrCreateWallet } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -44,12 +45,55 @@ export async function POST(req: Request) {
       );
     }
 
+    const now = Math.floor(Date.now() / 1000);
+
+    // Fecha sessões ativas antigas/presas deste consultor
+    db.prepare(
+      `
+      UPDATE chat_sessions
+      SET status = 'ended',
+          ended_at = ?
+      WHERE status = 'active'
+        AND consultor_id = ?
+        AND (
+          started_at IS NULL
+          OR started_at < ?
+        )
+      `
+    ).run(now, consultorId, now - 300);
+
+    // Se não houver sessão ativa real, liberta consultor preso
+    const activeSessionForConsultor = db
+      .prepare(
+        `
+        SELECT id
+        FROM chat_sessions
+        WHERE consultor_id = ?
+          AND status = 'active'
+        LIMIT 1
+        `
+      )
+      .get(consultorId) as any;
+
+    if (!activeSessionForConsultor) {
+      db.prepare(
+        `
+        UPDATE consultores
+        SET ocupado = 0,
+            last_seen_at = ?
+        WHERE id = ?
+          AND ocupado = 1
+        `
+      ).run(now, consultorId);
+    }
+
     const consultor = db
       .prepare(
         `
         SELECT id, nome, preco_por_min, preco_chat, ativo, online, ocupado
         FROM consultores
         WHERE id = ?
+        LIMIT 1
         `
       )
       .get(consultorId) as any;
@@ -82,24 +126,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const now = Math.floor(Date.now() / 1000);
-
-    // Fecha sessões ativas antigas ou presas antes de criar novo pedido
-    db.prepare(
-      `
-      UPDATE chat_sessions
-      SET status = 'ended',
-          ended_at = ?
-      WHERE status = 'active'
-        AND consultor_id = ?
-        AND (
-          started_at IS NULL
-          OR started_at < ?
-        )
-      `
-    ).run(now, consultorId, now - 300);
-
-    // Fecha quaisquer sessões ativas antigas do mesmo cliente + consultor
+    // Fecha sessões ativas antigas do mesmo cliente + consultor
     const oldActiveSessions = db
       .prepare(
         `
@@ -197,30 +224,69 @@ export async function POST(req: Request) {
 
     const chatSessionId = makeSessionId();
 
-    db.prepare(
-      `
-      INSERT INTO chat_sessions (
-        id,
-        cliente_id,
-        consultor_id,
-        cliente_nome,
-        status,
-        price_per_min,
-        started_at,
-        billed_seconds,
-        total_charged_eur,
-        consultor_earned_eur,
-        created_at
-      )
-      VALUES (?, ?, ?, ?, 'pending', ?, NULL, 0, 0, 0, strftime('%s','now'))
-      `
-    ).run(
-      chatSessionId,
-      user.id,
-      consultorId,
-      String((user as any).nome ?? "Cliente"),
-      precoPorMin
-    );
+    db.transaction(() => {
+      const freshConsultor = db
+        .prepare(
+          `
+          SELECT id, ativo, online, ocupado, preco_por_min, preco_chat
+          FROM consultores
+          WHERE id = ?
+          LIMIT 1
+          `
+        )
+        .get(consultorId) as any;
+
+      if (!freshConsultor) {
+        throw new Error("Consultor não encontrado.");
+      }
+
+      if (Number(freshConsultor.ativo ?? 0) !== 1) {
+        throw new Error("Consultor indisponível.");
+      }
+
+      if (Number(freshConsultor.online ?? 0) !== 1) {
+        throw new Error("Consultor está offline.");
+      }
+
+      if (Number(freshConsultor.ocupado ?? 0) === 1) {
+        throw new Error("Consultor ocupado neste momento.");
+      }
+
+      db.prepare(
+        `
+        INSERT INTO chat_sessions (
+          id,
+          cliente_id,
+          consultor_id,
+          cliente_nome,
+          status,
+          price_per_min,
+          started_at,
+          billed_seconds,
+          total_charged_eur,
+          consultor_earned_eur,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, 'pending', ?, NULL, 0, 0, 0, strftime('%s','now'))
+        `
+      ).run(
+        chatSessionId,
+        user.id,
+        consultorId,
+        String((user as any).nome ?? "Cliente"),
+        precoPorMin
+      );
+
+      // Reserva imediatamente a consultora
+      db.prepare(
+        `
+        UPDATE consultores
+        SET ocupado = 1,
+            last_seen_at = ?
+        WHERE id = ?
+        `
+      ).run(now, consultorId);
+    })();
 
     return NextResponse.json({
       ok: true,
@@ -234,8 +300,29 @@ export async function POST(req: Request) {
   } catch (e: any) {
     console.error("ERRO /api/chat/request:", e);
 
+    const message = String(e?.message || "Erro interno do servidor.");
+
+    if (
+      message === "Consultor ocupado neste momento." ||
+      message === "Consultor está offline." ||
+      message === "Consultor indisponível." ||
+      message === "Consultor não encontrado."
+    ) {
+      return NextResponse.json(
+        { ok: false, error: message },
+        {
+          status:
+            message === "Consultor não encontrado."
+              ? 404
+              : message === "Consultor ocupado neste momento."
+              ? 409
+              : 400,
+        }
+      );
+    }
+
     return NextResponse.json(
-      { ok: false, error: e?.message || "Erro interno do servidor." },
+      { ok: false, error: message || "Erro interno do servidor." },
       { status: 500 }
     );
   }
