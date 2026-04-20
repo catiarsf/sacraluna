@@ -1,14 +1,16 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-type Ctx = {
-  params: { pedidoId: string };
+type RouteContext = {
+  params: Promise<{
+    pedidoId: string;
+  }>;
 };
 
-export async function GET(_req: Request, context: Ctx) {
+export async function GET(_req: NextRequest, context: RouteContext) {
   try {
-    const { pedidoId } = context.params;
+    const { pedidoId } = await context.params;
 
     if (!pedidoId) {
       return NextResponse.json(
@@ -45,10 +47,15 @@ export async function GET(_req: Request, context: Ctx) {
       );
     }
 
-    return NextResponse.json({ ok: true, pedido });
+    return NextResponse.json({
+      ok: true,
+      pedido,
+    });
   } catch (e: any) {
+    console.error("ERRO /api/perguntas/[pedidoId]:", e);
+
     return NextResponse.json(
-      { ok: false, error: e?.message || "Erro no servidor" },
+      { ok: false, error: e?.message || "Erro no servidor." },
       { status: 500 }
     );
   }
