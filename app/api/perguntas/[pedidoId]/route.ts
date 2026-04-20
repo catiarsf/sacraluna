@@ -17,7 +17,6 @@ export async function GET(_req: Request, context: Ctx) {
       );
     }
 
-    // 🔥 IMPORT DINÂMICO (CRÍTICO para evitar erro no build)
     const { db } = await import("@/lib/db");
 
     const pedido = db
