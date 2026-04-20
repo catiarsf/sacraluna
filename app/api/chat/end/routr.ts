@@ -70,7 +70,6 @@ export async function POST(req: Request) {
 
     const totalElapsedSeconds = Math.max(0, now - startedAt);
 
-    // OPÇÃO B:
     // cobra também o minuto em curso ao terminar
     const totalMinutesToBill = Math.ceil(totalElapsedSeconds / 60);
     const alreadyBilledMinutes = Math.floor(billedSeconds / 60);
@@ -201,15 +200,31 @@ export async function POST(req: Request) {
         sessionId
       );
 
-      db.prepare(
-        `
-        UPDATE consultores
-        SET ocupado = 0,
-            online = 1,
-            last_seen_at = ?
-        WHERE id = ?
-        `
-      ).run(now, row.consultor_id);
+      // Só liberta a consultora se não houver outra sessão ativa
+      const stillActive = db
+        .prepare(
+          `
+          SELECT id
+          FROM chat_sessions
+          WHERE consultor_id = ?
+            AND status = 'active'
+            AND id <> ?
+          LIMIT 1
+          `
+        )
+        .get(row.consultor_id, sessionId) as any;
+
+      if (!stillActive) {
+        db.prepare(
+          `
+          UPDATE consultores
+          SET ocupado = 0,
+              online = 1,
+              last_seen_at = ?
+          WHERE id = ?
+          `
+        ).run(now, row.consultor_id);
+      }
     })();
 
     return NextResponse.json({
