@@ -1,13 +1,14 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
 
 type Ctx = {
-  params: Promise<{ pedidoId: string }>;
+  params: { pedidoId: string };
 };
 
 export async function GET(_req: Request, context: Ctx) {
   try {
-    const { pedidoId } = await context.params;
+    const { pedidoId } = context.params;
 
     if (!pedidoId) {
       return NextResponse.json(
@@ -15,6 +16,9 @@ export async function GET(_req: Request, context: Ctx) {
         { status: 400 }
       );
     }
+
+    // 🔥 IMPORT DINÂMICO (CRÍTICO para evitar erro no build)
+    const { db } = await import("@/lib/db");
 
     const pedido = db
       .prepare(
