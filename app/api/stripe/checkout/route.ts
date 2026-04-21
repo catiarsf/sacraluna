@@ -2,92 +2,133 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import db from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
-function getStripe() {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-
-  if (!secretKey) {
-    throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
-  }
-
-  return new Stripe(secretKey);
+function toNumber(v: any) {
+  const n = Number(String(v ?? "0").replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
 }
 
 export async function POST(req: Request) {
   try {
-    const stripe = getStripe();
+    const session = await getSession();
+    const user = session?.user;
+
+    if (!user?.id) {
+      return NextResponse.json(
+        { ok: false, error: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    if (String(user.role) !== "cliente") {
+      return NextResponse.json(
+        { ok: false, error: "Só clientes podem comprar perguntas." },
+        { status: 403 }
+      );
+    }
 
     const body = await req.json().catch(() => ({}));
+    const pedidoId = String(body?.pedidoId ?? "").trim();
 
-    const pedido_id = String(body?.pedido_id ?? "").trim();
-    const consultor_id = Number(body?.consultor_id ?? 0);
-    const preco = Number(body?.preco ?? 0);
-
-    if (!pedido_id) {
+    if (!pedidoId) {
       return NextResponse.json(
-        { ok: false, error: "pedido_id em falta." },
+        { ok: false, error: "Pedido inválido." },
         { status: 400 }
       );
     }
 
-    if (!consultor_id || consultor_id <= 0) {
+    const pedido = db
+      .prepare(
+        `
+        SELECT *
+        FROM pergunta_pedidos
+        WHERE id = ?
+        LIMIT 1
+        `
+      )
+      .get(pedidoId) as any;
+
+    if (!pedido) {
       return NextResponse.json(
-        { ok: false, error: "consultor_id inválido." },
+        { ok: false, error: "Pedido não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    if (Number(pedido.cliente_id) !== Number(user.id)) {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão." },
+        { status: 403 }
+      );
+    }
+
+    if (String(pedido.status) === "pago") {
+      return NextResponse.json(
+        { ok: false, error: "Este pedido já está pago." },
         { status: 400 }
       );
     }
 
-    if (!preco || preco <= 0) {
+    const amount = toNumber(pedido.preco_eur);
+
+    if (amount <= 0) {
       return NextResponse.json(
         { ok: false, error: "Preço inválido." },
         { status: 400 }
       );
     }
 
+    const stripeSecret = process.env.STRIPE_SECRET_KEY;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
-    if (!siteUrl) {
+    if (!stripeSecret || !siteUrl) {
       return NextResponse.json(
-        { ok: false, error: "Falta NEXT_PUBLIC_SITE_URL no .env.local" },
+        { ok: false, error: "Stripe não configurado." },
         { status: 500 }
       );
     }
 
-    const session = await stripe.checkout.sessions.create({
+    const stripe = new Stripe(stripeSecret);
+
+    const checkout = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
+      success_url: `${siteUrl}/sucesso?pedidoId=${pedidoId}`,
+      cancel_url: `${siteUrl}/cancelado?pedidoId=${pedidoId}`,
+
       line_items: [
         {
           price_data: {
             currency: "eur",
             product_data: {
-              name: "Consulta por Email - SacraLuna",
+              name: `Consulta por email (${pedido.pacote} perguntas)`,
             },
-            unit_amount: Math.round(preco * 100),
+            unit_amount: Math.round(amount * 100),
           },
           quantity: 1,
         },
       ],
+
       metadata: {
-        pedido_id,
-        consultor_id: String(consultor_id),
+        kind: "pergunta_checkout",
+        pedidoId: String(pedidoId),
+        consultorId: String(pedido.consultor_id),
+        clienteId: String(user.id),
+        amount: String(amount),
       },
-      success_url: `${siteUrl}/perguntas/${pedido_id}`,
-      cancel_url: `${siteUrl}/email/${consultor_id}`,
     });
 
     return NextResponse.json({
       ok: true,
-      url: session.url,
+      url: checkout.url,
     });
   } catch (e: any) {
-    console.error("ERRO STRIPE CHECKOUT:", e);
+    console.error("ERRO /api/perguntas/checkout:", e);
 
     return NextResponse.json(
-      {
-        ok: false,
-        error: e?.message || "Erro no checkout Stripe",
-      },
+      { ok: false, error: e?.message || "Erro ao criar checkout." },
       { status: 500 }
     );
   }
