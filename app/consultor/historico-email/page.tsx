@@ -32,12 +32,16 @@ function statusLabel(status?: string) {
   switch (String(status ?? "")) {
     case "aguarda_pagamento":
       return "Aguarda pagamento";
+    case "aguarda_aceitacao":
+      return "Aguarda aceitação";
     case "aguarda_resposta":
       return "Aguarda resposta";
     case "em_resposta":
       return "Em resposta";
     case "respondido":
       return "Respondido";
+    case "rejeitado":
+      return "Rejeitado";
     default:
       return status || "-";
   }
@@ -48,6 +52,7 @@ export default function ConsultorHistoricoEmailPage() {
   const [erro, setErro] = useState("");
   const [pedidos, setPedidos] = useState<EmailPedido[]>([]);
   const [expandedId, setExpandedId] = useState("");
+  const [actionLoadingId, setActionLoadingId] = useState("");
 
   async function carregar() {
     try {
@@ -73,6 +78,36 @@ export default function ConsultorHistoricoEmailPage() {
     carregar();
   }, []);
 
+  async function responderPedido(pedidoId: string, action: "accept" | "reject") {
+    try {
+      setActionLoadingId(pedidoId);
+      setErro("");
+
+      const res = await fetch("/api/consultor/emails/respond", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pedido_id: pedidoId,
+          action,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Erro ao atualizar pedido.");
+      }
+
+      await carregar();
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao atualizar pedido.");
+    } finally {
+      setActionLoadingId("");
+    }
+  }
+
   return (
     <main style={styles.page}>
       <div style={styles.topRow}>
@@ -97,6 +132,11 @@ export default function ConsultorHistoricoEmailPage() {
         <div style={styles.list}>
           {pedidos.map((item) => {
             const expanded = expandedId === item.id;
+            const aguardaAceitacao = item.status === "aguarda_aceitacao";
+            const podeResponder =
+              item.status === "aguarda_resposta" ||
+              item.status === "em_resposta" ||
+              item.status === "respondido";
 
             return (
               <div key={item.id} style={styles.card}>
@@ -128,12 +168,34 @@ export default function ConsultorHistoricoEmailPage() {
                       {expanded ? "Fechar" : "Ver conteúdo"}
                     </button>
 
-                    <Link
-                      href={`/consultor/responder-email/${item.id}`}
-                      style={styles.linkSmallBtn}
-                    >
-                      Responder
-                    </Link>
+                    {aguardaAceitacao ? (
+                      <>
+                        <button
+                          style={styles.acceptBtn}
+                          onClick={() => responderPedido(item.id, "accept")}
+                          disabled={actionLoadingId === item.id}
+                        >
+                          {actionLoadingId === item.id ? "A processar..." : "Aceitar"}
+                        </button>
+
+                        <button
+                          style={styles.rejectBtn}
+                          onClick={() => responderPedido(item.id, "reject")}
+                          disabled={actionLoadingId === item.id}
+                        >
+                          {actionLoadingId === item.id ? "A processar..." : "Rejeitar"}
+                        </button>
+                      </>
+                    ) : null}
+
+                    {podeResponder ? (
+                      <Link
+                        href={`/consultor/responder-email/${item.id}`}
+                        style={styles.linkSmallBtn}
+                      >
+                        Responder
+                      </Link>
+                    ) : null}
                   </div>
                 </div>
 
@@ -232,6 +294,24 @@ const styles: Record<string, React.CSSProperties> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+  },
+  acceptBtn: {
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(90,200,120,0.55)",
+    background: "rgba(50,140,80,0.30)",
+    color: "#d7ffe0",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  rejectBtn: {
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,80,80,0.55)",
+    background: "rgba(160,20,20,0.35)",
+    color: "#ffd6d6",
+    fontWeight: 900,
+    cursor: "pointer",
   },
   actions: {
     display: "flex",

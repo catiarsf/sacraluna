@@ -226,7 +226,6 @@ function processWalletTopup(session: Stripe.Checkout.Session) {
 function processPerguntaCheckout(session: Stripe.Checkout.Session) {
   const kind = norm(session.metadata?.kind);
 
-  // aceita os dois nomes para não falhar se o checkout antigo estiver diferente
   if (kind !== "pergunta_checkout" && kind !== "email_pack") {
     return { handled: false, reason: "kind não é pergunta_checkout/email_pack" };
   }
@@ -274,26 +273,9 @@ function processPerguntaCheckout(session: Stripe.Checkout.Session) {
     throw new Error("Pedido não encontrado no webhook.");
   }
 
-  // duplicado por transação já criada
-  const existingEarnTx = db
-    .prepare(
-      `
-      SELECT wt.id
-      FROM wallet_transactions wt
-      JOIN wallets w ON w.id = wt.wallet_id
-      WHERE wt.session_id = ?
-        AND wt.type = 'consultor_earned'
-        AND w.user_type = 'consultor'
-        AND w.user_id = ?
-      LIMIT 1
-      `
-    )
-    .get(session.id ?? "", consultorId) as { id: number } | undefined;
-
-  // duplicado por payment id já gravado no pedido
   if (
-    existingEarnTx ||
-    (pedido.stripe_payment_id && String(pedido.stripe_payment_id) === String(session.id))
+    pedido.stripe_payment_id &&
+    String(pedido.stripe_payment_id) === String(session.id)
   ) {
     return {
       handled: true,
@@ -303,70 +285,21 @@ function processPerguntaCheckout(session: Stripe.Checkout.Session) {
     };
   }
 
-  const consultor = db
-    .prepare(
-      `
-      SELECT percentagem_ganho
-      FROM consultores
-      WHERE id = ?
-      LIMIT 1
-      `
-    )
-    .get(consultorId) as any;
-
-  const percentagem = round2(Number(consultor?.percentagem_ganho ?? 40));
-  const consultorShare = round2(amount * (percentagem / 100));
-
-  const walletId = ensureWallet("consultor", consultorId);
-
-  db.transaction(() => {
-    db.prepare(
-      `
-      UPDATE pergunta_pedidos
-      SET status = 'aguarda_resposta',
-          stripe_payment_id = COALESCE(stripe_payment_id, ?)
-      WHERE id = ?
-      `
-    ).run(session.id ?? null, pedidoId);
-
-    db.prepare(
-      `
-      UPDATE wallets
-      SET
-        balance_eur = balance_eur + ?,
-        earned_eur = earned_eur + ?,
-        updated_at = strftime('%s','now')
-      WHERE id = ?
-      `
-    ).run(consultorShare, consultorShare, walletId);
-
-    db.prepare(
-      `
-      INSERT INTO wallet_transactions (
-        wallet_id,
-        session_id,
-        type,
-        amount_eur,
-        description
-      )
-      VALUES (?, ?, 'consultor_earned', ?, ?)
-      `
-    ).run(
-      walletId,
-      session.id ?? null,
-      consultorShare,
-      `Comissão pacote perguntas ${pedidoId}`
-    );
-  });
+  db.prepare(
+    `
+    UPDATE pergunta_pedidos
+    SET status = 'aguarda_aceitacao',
+        stripe_payment_id = COALESCE(stripe_payment_id, ?)
+    WHERE id = ?
+    `
+  ).run(session.id ?? null, pedidoId);
 
   return {
     handled: true,
     duplicate: false,
     pedidoId,
     consultorId,
-    consultorShare,
     amount,
-    percentagem,
   };
 }
 
@@ -478,7 +411,7 @@ export async function POST(req: Request) {
 
       const perguntaResult = processPerguntaCheckout(session);
       if (perguntaResult.handled) {
-        console.log("COMISSÃO PERGUNTA:", perguntaResult);
+        console.log("RESULTADO PERGUNTA:", perguntaResult);
       }
 
       if (!walletResult.handled && !perguntaResult.handled) {
