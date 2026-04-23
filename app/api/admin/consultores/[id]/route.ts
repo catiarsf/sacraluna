@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
-import db from "@/lib/db";
 
 type Ctx = {
   params: Promise<{ id: string }>;
@@ -20,8 +21,15 @@ function toInt(v: any, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+async function getDb() {
+  const mod = await import("@/lib/db");
+  return mod.default;
+}
+
 export async function PUT(req: Request, ctx: Ctx) {
   try {
+    const db = await getDb();
+
     const { id } = await ctx.params;
     const consultorId = Number(id);
 
@@ -115,20 +123,27 @@ export async function PUT(req: Request, ctx: Ctx) {
     const email = norm(body?.email ?? atual.email).toLowerCase();
     const telefone = norm(body?.telefone ?? atual.telefone);
     const password = norm(body?.password);
-    const foto_url = norm(body?.foto_url ?? atual.foto_url) || "/consultores/default.jpg";
+    const foto_url =
+      norm(body?.foto_url ?? atual.foto_url) || "/consultores/default.jpg";
     const especialidades = norm(body?.especialidades ?? atual.especialidades);
     const apresentacao = norm(body?.apresentacao ?? atual.apresentacao);
 
     const preco_por_min = toNumber(
       body?.preco_por_min ??
-      body?.valor_min_eur ??
-      body?.valor_min ??
-      atual.preco_por_min
+        body?.valor_min_eur ??
+        body?.valor_min ??
+        atual.preco_por_min
     );
 
-    const preco_chat = toNumber(body?.preco_chat ?? atual.preco_chat ?? preco_por_min);
-    const preco_voz = toNumber(body?.preco_voz ?? atual.preco_voz ?? preco_por_min);
-    const percentagem_ganho = toNumber(body?.percentagem_ganho ?? atual.percentagem_ganho ?? 40);
+    const preco_chat = toNumber(
+      body?.preco_chat ?? atual.preco_chat ?? preco_por_min
+    );
+    const preco_voz = toNumber(
+      body?.preco_voz ?? atual.preco_voz ?? preco_por_min
+    );
+    const percentagem_ganho = toNumber(
+      body?.percentagem_ganho ?? atual.percentagem_ganho ?? 40
+    );
 
     const pack1Qtd = toInt(body?.pack_1_qtd ?? atual.pack_1_qtd ?? 1, 1);
     const pack1Preco = toNumber(body?.pack_1_preco ?? atual.pack_1_preco ?? 1);
@@ -270,7 +285,8 @@ export async function PUT(req: Request, ctx: Ctx) {
       consultor: atualizado,
     });
   } catch (e: any) {
-    console.error("ERRO PUT:", e);
+    console.error("ERRO PUT /api/admin/consultores/[id]:", e);
+
     return NextResponse.json(
       { ok: false, error: e?.message || "Erro no servidor" },
       { status: 500 }
@@ -280,6 +296,8 @@ export async function PUT(req: Request, ctx: Ctx) {
 
 export async function DELETE(_req: Request, ctx: Ctx) {
   try {
+    const db = await getDb();
+
     const { id } = await ctx.params;
     const consultorId = Number(id);
 
@@ -294,6 +312,8 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
+    console.error("ERRO DELETE /api/admin/consultores/[id]:", e);
+
     return NextResponse.json(
       { ok: false, error: e?.message || "Erro no servidor" },
       { status: 500 }
