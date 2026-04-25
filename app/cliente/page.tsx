@@ -260,6 +260,13 @@ export default function ClientePage() {
       <div style={styles.quickActions}>
         <button
           style={styles.quickButton}
+          onClick={() => router.push("/cliente/perfil")}
+        >
+          👤 Editar perfil
+        </button>
+
+        <button
+          style={styles.quickButton}
           onClick={() => router.push("/cliente/emails")}
         >
           📩 Consultas por Email
@@ -314,8 +321,8 @@ export default function ClientePage() {
           <ul style={styles.list}>
             {historico.map((h) => (
               <li key={h.id} style={styles.listItem}>
-                <strong>{h.consultor_nome}</strong> — {h.data} — {h.duracao_min} min —{" "}
-                {Number(h.total_eur ?? 0).toFixed(2)}€
+                <strong>{h.consultor_nome}</strong> — {h.data} —{" "}
+                {h.duracao_min} min — {Number(h.total_eur ?? 0).toFixed(2)}€
               </li>
             ))}
           </ul>
