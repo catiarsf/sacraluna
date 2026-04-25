@@ -31,7 +31,17 @@ export async function GET() {
         FROM pergunta_pedidos p
         LEFT JOIN users u ON u.id = p.cliente_id
         WHERE p.consultor_id = ?
-        ORDER BY p.created_at DESC
+          AND p.stripe_payment_id IS NOT NULL
+          AND p.status IN ('aguarda_aceitacao', 'aguarda_resposta', 'em_resposta', 'respondido')
+        ORDER BY 
+          CASE 
+            WHEN p.status = 'aguarda_aceitacao' THEN 1
+            WHEN p.status = 'aguarda_resposta' THEN 2
+            WHEN p.status = 'em_resposta' THEN 3
+            WHEN p.status = 'respondido' THEN 4
+            ELSE 5
+          END,
+          p.created_at DESC
         `
       )
       .all(consultorId) as any[];

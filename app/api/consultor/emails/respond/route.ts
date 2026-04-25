@@ -4,11 +4,6 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import db from "@/lib/db";
 
-function toNumber(v: any) {
-  const n = Number(String(v ?? "0").replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
-
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -20,11 +15,12 @@ function ensureWallet(userType: string, userId: number) {
       SELECT id
       FROM wallets
       WHERE user_type = ? AND user_id = ?
+      LIMIT 1
       `
     )
-    .get(userType, userId) as { id: number } | undefined;
+    .get(userType, userId) as any;
 
-  if (existing) return existing.id;
+  if (existing?.id) return Number(existing.id);
 
   const created = db
     .prepare(
@@ -59,6 +55,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
+
     const pedidoId = String(body?.pedido_id ?? "").trim();
     const action = String(body?.action ?? "").trim().toLowerCase();
 
@@ -101,9 +98,16 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!pedido.stripe_payment_id) {
+      return NextResponse.json(
+        { ok: false, error: "Este pedido ainda não está pago." },
+        { status: 400 }
+      );
+    }
+
     if (String(pedido.status ?? "") !== "aguarda_aceitacao") {
       return NextResponse.json(
-        { ok: false, error: "Este pedido já não está pendente de aceitação." },
+        { ok: false, error: "Este pedido já não aguarda aceitação." },
         { status: 400 }
       );
     }
@@ -137,7 +141,7 @@ export async function POST(req: Request) {
         LIMIT 1
         `
       )
-      .get(String(pedido.stripe_payment_id ?? ""), consultorId) as { id: number } | undefined;
+      .get(String(pedido.stripe_payment_id), consultorId) as any;
 
     if (existingEarnTx) {
       db.prepare(
@@ -150,9 +154,9 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         ok: true,
+        duplicate: true,
         status: "aguarda_resposta",
         pedido_id: pedidoId,
-        duplicate: true,
       });
     }
 
@@ -168,9 +172,8 @@ export async function POST(req: Request) {
       .get(consultorId) as any;
 
     const percentagem = round2(Number(consultor?.percentagem_ganho ?? 40));
-    const amount = round2(Number(pedido.preco_eur ?? 0));
-    const consultorShare = round2(amount * (percentagem / 100));
-
+    const preco = round2(Number(pedido.preco_eur ?? 0));
+    const consultorShare = round2(preco * (percentagem / 100));
     const walletId = ensureWallet("consultor", consultorId);
 
     db.transaction(() => {
@@ -198,7 +201,7 @@ export async function POST(req: Request) {
         `
       ).run(
         walletId,
-        String(pedido.stripe_payment_id ?? pedidoId),
+        String(pedido.stripe_payment_id),
         consultorShare,
         `Comissão pacote perguntas ${pedidoId}`
       );
@@ -217,6 +220,7 @@ export async function POST(req: Request) {
       status: "aguarda_resposta",
       pedido_id: pedidoId,
       consultor_share: consultorShare,
+      percentagem,
     });
   } catch (e: any) {
     console.error("ERRO /api/consultor/emails/respond:", e);
