@@ -479,7 +479,7 @@ export default function ChatPage() {
     goBackToArea();
   }
 
-  function send() {
+  async function send() {
     const t = text.trim();
     if (!t) return;
 
@@ -495,6 +495,13 @@ export default function ChatPage() {
     };
 
     sockRef.current.emit("msg", payload);
+    await fetch("/api/chat/messages", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(payload),
+});
     setText("");
   }
 
