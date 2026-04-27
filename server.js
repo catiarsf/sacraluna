@@ -1,7 +1,12 @@
 const http = require("http");
 const { Server } = require("socket.io");
+const Database = require("better-sqlite3");
+const path = require("path");
 
 const PORT = Number(process.env.PORT);
+
+const dbPath = path.join("/data", "data.sqlite");
+const db = new Database(dbPath);
 
 const allowedOrigins = [
   "http://localhost:3000",
@@ -44,22 +49,44 @@ io.on("connection", (socket) => {
   socket.on("register_consultor", ({ consultorId }) => {
     if (!consultorId) return;
     socket.join(roomConsultor(consultorId));
-    console.log(`consultor ${consultorId} joined ${roomConsultor(consultorId)}`);
   });
 
   socket.on("join", ({ sessionId }) => {
     if (!sessionId) return;
     socket.join(roomSession(sessionId));
-    console.log(`socket ${socket.id} joined ${roomSession(sessionId)}`);
   });
 
   socket.on("msg", (data) => {
     if (!data?.sessionId || !data?.text) return;
 
+    const senderRole =
+      data.senderRole === "consultor" ? "consultor" : "cliente";
+
+    const at = Math.floor(Date.now() / 1000);
+
+    try {
+      db.prepare(`
+        INSERT INTO chat_messages (
+          session_id,
+          sender_role,
+          text,
+          sent_at
+        )
+        VALUES (?, ?, ?, ?)
+      `).run(
+        String(data.sessionId),
+        senderRole,
+        String(data.text),
+        at
+      );
+    } catch (e) {
+      console.error("Erro ao gravar mensagem:", e.message);
+    }
+
     io.to(roomSession(data.sessionId)).emit("msg", {
       sessionId: String(data.sessionId),
       text: String(data.text),
-      senderRole: data.senderRole === "consultor" ? "consultor" : "cliente",
+      senderRole,
       at: Date.now(),
     });
   });
