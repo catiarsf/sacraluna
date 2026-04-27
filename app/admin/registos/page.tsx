@@ -3,6 +3,14 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 
+type Transacao = {
+  id: number;
+  type: string;
+  amount_eur: number;
+  description: string;
+  created_at: number;
+};
+
 type Cliente = {
   id: number;
   nome: string | null;
@@ -10,6 +18,9 @@ type Cliente = {
   telefone: string | null;
   created_at: number;
   saldo: number;
+  gasto_total: number;
+  bloqueado: number;
+  transacoes: Transacao[];
 };
 
 function formatDate(ts?: number) {
@@ -21,6 +32,7 @@ export default function AdminRegistosPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   async function load() {
     try {
@@ -46,7 +58,7 @@ export default function AdminRegistosPage() {
   }
 
   async function adicionarSaldo(userId: number) {
-    const valor = prompt("Quanto queres adicionar? Exemplo: 10");
+    const valor = prompt("Quanto queres adicionar?");
 
     if (!valor) return;
 
@@ -75,7 +87,67 @@ export default function AdminRegistosPage() {
         throw new Error(data?.error || "Erro ao adicionar saldo.");
       }
 
-      alert("Saldo adicionado com sucesso.");
+      load();
+    } catch (e: any) {
+      alert(String(e?.message ?? e));
+    }
+  }
+
+  async function retirarSaldo(userId: number) {
+    const valor = prompt("Quanto queres retirar?");
+
+    if (!valor) return;
+
+    const amount = Number(String(valor).replace(",", "."));
+
+    if (!amount || amount <= 0) {
+      alert("Valor inválido.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/admin/clientes/debit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          amount,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Erro ao retirar saldo.");
+      }
+
+      load();
+    } catch (e: any) {
+      alert(String(e?.message ?? e));
+    }
+  }
+
+  async function toggleBlock(userId: number, bloqueado: boolean) {
+    try {
+      const res = await fetch("/api/admin/clientes/block", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          bloqueado: !bloqueado,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Erro.");
+      }
+
       load();
     } catch (e: any) {
       alert(String(e?.message ?? e));
@@ -104,179 +176,182 @@ export default function AdminRegistosPage() {
           </div>
 
           <Link href="/admin" style={styles.backBtn}>
-            ← Voltar à administração
+            ← Voltar
           </Link>
         </div>
 
-        {loading ? <div style={styles.info}>A carregar registos...</div> : null}
+        {loading ? <div style={styles.info}>A carregar...</div> : null}
         {err ? <div style={styles.error}>{err}</div> : null}
 
-        {!loading && !err && clientes.length === 0 ? (
-          <div style={styles.info}>Ainda não existem clientes registados.</div>
-        ) : null}
+        <div style={styles.card}>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Nome</th>
+                  <th style={styles.th}>Email</th>
+                  <th style={styles.th}>Saldo</th>
+                  <th style={styles.th}>Estado</th>
+                  <th style={styles.th}>Ações</th>
+                </tr>
+              </thead>
 
-        {!loading && !err && clientes.length > 0 ? (
-          <div style={styles.card}>
-            <div style={styles.tableWrap}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>ID</th>
-                    <th style={styles.th}>Nome</th>
-                    <th style={styles.th}>Email</th>
-                    <th style={styles.th}>Telefone</th>
-                    <th style={styles.th}>Registado em</th>
-                    <th style={styles.th}>Saldo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clientes.map((c) => (
-                    <tr key={c.id}>
-                      <td style={styles.td}>{c.id}</td>
+              <tbody>
+                {clientes.map((c) => (
+                  <React.Fragment key={c.id}>
+                    <tr>
                       <td style={styles.td}>{c.nome || "-"}</td>
                       <td style={styles.td}>{c.email}</td>
-                      <td style={styles.td}>{c.telefone || "-"}</td>
-                      <td style={styles.td}>{formatDate(c.created_at)}</td>
                       <td style={styles.td}>
-                        <div style={styles.saldoBox}>
-                          <div style={styles.saldoValue}>
-                            {Number(c.saldo ?? 0).toFixed(2)}€
-                          </div>
-
+                        {Number(c.saldo ?? 0).toFixed(2)}€
+                      </td>
+                      <td style={styles.td}>
+                        {c.bloqueado ? "🚫 Bloqueado" : "✅ Ativo"}
+                      </td>
+                      <td style={styles.td}>
+                        <div style={styles.actions}>
                           <button
-                            type="button"
-                            style={styles.btnAdd}
+                            style={styles.btnGold}
                             onClick={() => adicionarSaldo(c.id)}
                           >
-                            + Saldo
+                            +Saldo
+                          </button>
+
+                          <button
+                            style={styles.btnRed}
+                            onClick={() => retirarSaldo(c.id)}
+                          >
+                            -Saldo
+                          </button>
+
+                          <button
+                            style={styles.btnBlue}
+                            onClick={() =>
+                              toggleBlock(c.id, Boolean(c.bloqueado))
+                            }
+                          >
+                            {c.bloqueado ? "Desbloquear" : "Bloquear"}
+                          </button>
+
+                          <button
+                            style={styles.btnGray}
+                            onClick={() =>
+                              setExpandedId(expandedId === c.id ? null : c.id)
+                            }
+                          >
+                            Movimentos
                           </button>
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+
+                    {expandedId === c.id && (
+                      <tr>
+                        <td colSpan={5} style={styles.expandTd}>
+                          {c.transacoes?.map((t) => (
+                            <div key={t.id} style={styles.movItem}>
+                              {formatDate(t.created_at)} — {t.type} —{" "}
+                              {Number(t.amount_eur).toFixed(2)}€ —{" "}
+                              {t.description}
+                            </div>
+                          ))}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ) : null}
+        </div>
       </div>
     </main>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    padding: "24px 16px 40px",
-    color: "white",
-  },
-
-  wrap: {
-    maxWidth: 1100,
-    margin: "0 auto",
-  },
-
+  page: { minHeight: "100vh", padding: 20, color: "white" },
+  wrap: { maxWidth: 1200, margin: "0 auto" },
   top: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
+    marginBottom: 20,
     flexWrap: "wrap",
-    marginBottom: 18,
   },
-
-  h1: {
-    margin: 0,
-    fontSize: 30,
-    fontWeight: 900,
-    color: "#f4d78b",
-  },
-
-  liveText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "#88ffbc",
-    opacity: 0.9,
-  },
-
+  h1: { fontSize: 30, fontWeight: 900, color: "#f4d78b" },
+  liveText: { color: "#88ffbc", fontSize: 12 },
   backBtn: {
-    textDecoration: "none",
     padding: "10px 14px",
-    borderRadius: 12,
-    border: "1px solid rgba(212,175,55,0.55)",
-    background: "rgba(0,0,0,0.24)",
+    borderRadius: 10,
     color: "#f4d78b",
-    fontWeight: 900,
+    textDecoration: "none",
   },
-
   card: {
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.10)",
-    background: "rgba(0,0,0,0.24)",
+    borderRadius: 16,
+    background: "rgba(0,0,0,0.25)",
     overflow: "hidden",
   },
-
-  tableWrap: {
-    overflowX: "auto",
-  },
-
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-  },
-
+  tableWrap: { overflowX: "auto" },
+  table: { width: "100%", borderCollapse: "collapse" },
   th: {
     textAlign: "left",
-    padding: 14,
-    background: "rgba(255,255,255,0.04)",
+    padding: 12,
     color: "#f4d78b",
-    fontSize: 13,
-    borderBottom: "1px solid rgba(255,255,255,0.10)",
-    whiteSpace: "nowrap",
   },
-
   td: {
-    padding: 14,
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
-    fontSize: 14,
-    verticalAlign: "top",
+    padding: 12,
+    borderTop: "1px solid rgba(255,255,255,0.08)",
   },
-
-  saldoBox: {
+  expandTd: {
+    padding: 12,
+    background: "rgba(255,255,255,0.03)",
+  },
+  movItem: {
+    marginBottom: 6,
+    fontSize: 13,
+  },
+  actions: {
     display: "flex",
-    flexDirection: "column",
     gap: 6,
+    flexWrap: "wrap",
   },
-
-  saldoValue: {
-    fontWeight: 900,
-    color: "#88ffbc",
-    fontSize: 14,
-  },
-
-  btnAdd: {
+  btnGold: {
+    background: "#f4d78b",
+    color: "#111",
+    border: "none",
     padding: "8px 10px",
-    borderRadius: 10,
-    border: "1px solid rgba(212,175,55,0.6)",
-    background: "rgba(212,175,55,0.15)",
-    color: "#f4d78b",
-    fontWeight: 900,
+    borderRadius: 8,
     cursor: "pointer",
-    whiteSpace: "nowrap",
   },
-
+  btnRed: {
+    background: "darkred",
+    color: "white",
+    border: "none",
+    padding: "8px 10px",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+  btnBlue: {
+    background: "#3578e5",
+    color: "white",
+    border: "none",
+    padding: "8px 10px",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+  btnGray: {
+    background: "#555",
+    color: "white",
+    border: "none",
+    padding: "8px 10px",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
   info: {
-    padding: 16,
-    borderRadius: 14,
-    background: "rgba(0,0,0,0.24)",
-    border: "1px solid rgba(255,255,255,0.10)",
+    padding: 14,
   },
-
   error: {
-    padding: 16,
-    borderRadius: 14,
-    background: "rgba(120,0,0,0.25)",
-    border: "1px solid rgba(255,80,80,0.20)",
-    color: "#ffd6d6",
+    padding: 14,
+    color: "#ffb3b3",
   },
 };

@@ -15,6 +15,7 @@ const dbPath = path.join(basePath, "data.sqlite");
 const db = new Database(dbPath);
 
 db.pragma("journal_mode = WAL");
+db.pragma("busy_timeout = 5000");
 db.pragma("foreign_keys = ON");
 
 db.exec(`
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS users (
   telefone TEXT,
   password_hash TEXT,
   role TEXT NOT NULL DEFAULT 'cliente',
+  bloqueado INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
@@ -58,19 +60,14 @@ CREATE TABLE IF NOT EXISTS consultores (
   voip_ativo INTEGER NOT NULL DEFAULT 1,
   ocupado INTEGER NOT NULL DEFAULT 0,
   last_seen_at INTEGER,
-
   pack_1_qtd INTEGER NOT NULL DEFAULT 1,
   pack_1_preco REAL NOT NULL DEFAULT 1,
-
   pack_2_qtd INTEGER NOT NULL DEFAULT 3,
   pack_2_preco REAL NOT NULL DEFAULT 3,
-
   pack_3_qtd INTEGER NOT NULL DEFAULT 5,
   pack_3_preco REAL NOT NULL DEFAULT 5,
-
   pack_4_qtd INTEGER NOT NULL DEFAULT 10,
   pack_4_preco REAL NOT NULL DEFAULT 10,
-
   created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
@@ -218,8 +215,10 @@ CREATE TABLE IF NOT EXISTS call_sessions (
 `);
 
 /* MIGRAÇÕES SEGURAS */
-try { db.exec(`ALTER TABLE consultores ADD COLUMN telefone TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN telefone TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN bloqueado INTEGER NOT NULL DEFAULT 0;`); } catch {}
+
+try { db.exec(`ALTER TABLE consultores ADD COLUMN telefone TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN preco_chat REAL NOT NULL DEFAULT 1.0;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN preco_voz REAL NOT NULL DEFAULT 1.0;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN percentagem_ganho REAL NOT NULL DEFAULT 40;`); } catch {}
@@ -227,7 +226,6 @@ try { db.exec(`ALTER TABLE consultores ADD COLUMN foto_url TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN especialidades TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN apresentacao TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN voip_ativo INTEGER NOT NULL DEFAULT 1;`); } catch {}
-
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_1_qtd INTEGER NOT NULL DEFAULT 1;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_1_preco REAL NOT NULL DEFAULT 1;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_2_qtd INTEGER NOT NULL DEFAULT 3;`); } catch {}
@@ -242,7 +240,6 @@ try { db.exec(`ALTER TABLE contactos ADD COLUMN assunto TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN status TEXT NOT NULL DEFAULT 'novo';`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN responded_at INTEGER;`); } catch {}
 
-/* MIGRAÇÕES CALL_SESSIONS */
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN call_sid TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN price_per_min REAL NOT NULL DEFAULT 0;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN duration_seconds INTEGER NOT NULL DEFAULT 0;`); } catch {}
@@ -253,7 +250,6 @@ try { db.exec(`ALTER TABLE call_sessions ADD COLUMN recording_url TEXT;`); } cat
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN started_at INTEGER;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN ended_at INTEGER;`); } catch {}
 
-/* MIGRAÇÕES SERVIÇOS */
 try { db.exec(`ALTER TABLE servicos ADD COLUMN consultor_id INTEGER;`); } catch {}
 try { db.exec(`ALTER TABLE servicos ADD COLUMN preco_tipo TEXT NOT NULL DEFAULT 'fixo';`); } catch {}
 try { db.exec(`ALTER TABLE servicos ADD COLUMN preco_texto TEXT;`); } catch {}
