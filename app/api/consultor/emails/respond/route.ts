@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -98,13 +99,6 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!pedido.stripe_payment_id) {
-      return NextResponse.json(
-        { ok: false, error: "Este pedido ainda não está pago." },
-        { status: 400 }
-      );
-    }
-
     if (String(pedido.status ?? "") !== "aguarda_aceitacao") {
       return NextResponse.json(
         { ok: false, error: "Este pedido já não aguarda aceitação." },
@@ -128,6 +122,8 @@ export async function POST(req: Request) {
       });
     }
 
+    const transactionSessionId = `email:${pedidoId}`;
+
     const existingEarnTx = db
       .prepare(
         `
@@ -141,7 +137,7 @@ export async function POST(req: Request) {
         LIMIT 1
         `
       )
-      .get(String(pedido.stripe_payment_id), consultorId) as any;
+      .get(transactionSessionId, consultorId) as any;
 
     if (existingEarnTx) {
       db.prepare(
@@ -195,13 +191,14 @@ export async function POST(req: Request) {
           session_id,
           type,
           amount_eur,
-          description
+          description,
+          created_at
         )
-        VALUES (?, ?, 'consultor_earned', ?, ?)
+        VALUES (?, ?, 'consultor_earned', ?, ?, strftime('%s','now'))
         `
       ).run(
         walletId,
-        String(pedido.stripe_payment_id),
+        transactionSessionId,
         consultorShare,
         `Comissão pacote perguntas ${pedidoId}`
       );

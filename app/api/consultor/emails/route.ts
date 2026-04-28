@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -31,15 +32,21 @@ export async function GET() {
         FROM pergunta_pedidos p
         LEFT JOIN users u ON u.id = p.cliente_id
         WHERE p.consultor_id = ?
-          AND p.stripe_payment_id IS NOT NULL
-          AND p.status IN ('aguarda_aceitacao', 'aguarda_resposta', 'em_resposta', 'respondido')
-        ORDER BY 
-          CASE 
+          AND p.status IN (
+            'aguarda_aceitacao',
+            'aguarda_resposta',
+            'em_resposta',
+            'respondido',
+            'rejeitado'
+          )
+        ORDER BY
+          CASE
             WHEN p.status = 'aguarda_aceitacao' THEN 1
             WHEN p.status = 'aguarda_resposta' THEN 2
             WHEN p.status = 'em_resposta' THEN 3
             WHEN p.status = 'respondido' THEN 4
-            ELSE 5
+            WHEN p.status = 'rejeitado' THEN 5
+            ELSE 6
           END,
           p.created_at DESC
         `
@@ -58,7 +65,7 @@ export async function GET() {
             responded_at
           FROM pergunta_itens
           WHERE pedido_id = ?
-          ORDER BY created_at ASC
+          ORDER BY created_at ASC, id ASC
           `
         )
         .all(pedido.id) as any[];
