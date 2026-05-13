@@ -24,6 +24,7 @@ function sleep(ms: number) {
 
 export default function ClientePage() {
   const router = useRouter();
+
   const [data, setData] = useState<ClienteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
@@ -64,6 +65,7 @@ export default function ClientePage() {
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete("wallet");
     cleanUrl.searchParams.delete("session_id");
+
     window.history.replaceState({}, "", cleanUrl.toString());
   }
 
@@ -91,7 +93,9 @@ export default function ClientePage() {
           ok: Boolean(json?.ok),
           id: Number(json?.cliente?.id ?? json?.id ?? 0),
           saldo_eur: Number(json?.saldo_eur ?? 0),
-          historico: Array.isArray(json?.historico) ? json.historico : [],
+          historico: Array.isArray(json?.historico)
+            ? json.historico
+            : [],
         });
       } catch {
         setErro("Erro ao carregar dados.");
@@ -144,6 +148,7 @@ export default function ClientePage() {
       if (typeof window === "undefined") return;
 
       const params = new URLSearchParams(window.location.search);
+
       const walletStatus = params.get("wallet");
       const checkoutSessionId = params.get("session_id");
 
@@ -170,15 +175,18 @@ export default function ClientePage() {
         let confirmado = false;
 
         for (let i = 0; i < 5; i++) {
-          const res = await fetch("/api/stripe/confirm-wallet-session", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              sessionId: checkoutSessionId,
-            }),
-          });
+          const res = await fetch(
+            "/api/stripe/confirm-wallet-session",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                sessionId: checkoutSessionId,
+              }),
+            }
+          );
 
           const json = await res.json().catch(() => null);
 
@@ -226,7 +234,9 @@ export default function ClientePage() {
 
   async function terminarSessao() {
     try {
-      await fetch("/api/logout", { method: "POST" });
+      await fetch("/api/logout", {
+        method: "POST",
+      });
     } finally {
       router.push("/login");
     }
@@ -251,7 +261,10 @@ export default function ClientePage() {
   }
 
   const saldo = Number(data?.saldo_eur ?? 0);
-  const historico = Array.isArray(data?.historico) ? data.historico : [];
+
+  const historico = Array.isArray(data?.historico)
+    ? data.historico
+    : [];
 
   return (
     <main style={styles.page}>
@@ -271,14 +284,26 @@ export default function ClientePage() {
         >
           📩 Consultas por Email
         </button>
+
+        <button
+          style={styles.quickButton}
+          onClick={() => router.push("/cliente/tickets")}
+        >
+          📦 Os meus serviços
+        </button>
       </div>
 
       <div style={styles.card}>
         <h2 style={styles.h2}>Saldo / Créditos</h2>
-        <p style={styles.saldo}>{saldo.toFixed(2)}€</p>
+
+        <p style={styles.saldo}>
+          {saldo.toFixed(2)}€
+        </p>
 
         {confirmandoSaldo ? (
-          <p style={styles.infoText}>A confirmar pagamento e atualizar saldo...</p>
+          <p style={styles.infoText}>
+            A confirmar pagamento e atualizar saldo...
+          </p>
         ) : null}
 
         <div style={styles.creditBox}>
@@ -290,7 +315,9 @@ export default function ClientePage() {
               style={styles.buyButton}
               disabled={creditoLoading || confirmandoSaldo}
             >
-              {creditoLoading ? "A processar..." : "Comprar 5€"}
+              {creditoLoading
+                ? "A processar..."
+                : "Comprar 5€"}
             </button>
 
             <button
@@ -298,7 +325,9 @@ export default function ClientePage() {
               style={styles.buyButton}
               disabled={creditoLoading || confirmandoSaldo}
             >
-              {creditoLoading ? "A processar..." : "Comprar 10€"}
+              {creditoLoading
+                ? "A processar..."
+                : "Comprar 10€"}
             </button>
 
             <button
@@ -306,14 +335,18 @@ export default function ClientePage() {
               style={styles.buyButton}
               disabled={creditoLoading || confirmandoSaldo}
             >
-              {creditoLoading ? "A processar..." : "Comprar 20€"}
+              {creditoLoading
+                ? "A processar..."
+                : "Comprar 20€"}
             </button>
           </div>
         </div>
       </div>
 
       <div style={styles.card}>
-        <h2 style={styles.h2}>Histórico de consultas</h2>
+        <h2 style={styles.h2}>
+          Histórico de consultas
+        </h2>
 
         {historico.length === 0 ? (
           <p>Sem consultas registadas.</p>
@@ -321,8 +354,13 @@ export default function ClientePage() {
           <ul style={styles.list}>
             {historico.map((h) => (
               <li key={h.id} style={styles.listItem}>
-                <strong>{h.consultor_nome}</strong> — {h.data} —{" "}
-                {h.duracao_min} min — {Number(h.total_eur ?? 0).toFixed(2)}€
+                <strong>{h.consultor_nome}</strong>
+                {" — "}
+                {h.data}
+                {" — "}
+                {h.duracao_min} min
+                {" — "}
+                {Number(h.total_eur ?? 0).toFixed(2)}€
               </li>
             ))}
           </ul>
@@ -330,7 +368,10 @@ export default function ClientePage() {
       </div>
 
       <div style={{ marginTop: 30 }}>
-        <button onClick={terminarSessao} style={styles.logoutButton}>
+        <button
+          onClick={terminarSessao}
+          style={styles.logoutButton}
+        >
           Terminar sessão
         </button>
       </div>
@@ -344,28 +385,33 @@ const styles: Record<string, React.CSSProperties> = {
     color: "white",
     minHeight: "100vh",
   },
+
   h1: {
     marginBottom: 20,
     fontSize: 40,
     fontWeight: 900,
   },
+
   h2: {
     marginBottom: 10,
     fontSize: 24,
     fontWeight: 800,
   },
+
   h3: {
     marginTop: 18,
     marginBottom: 10,
     fontSize: 18,
     fontWeight: 800,
   },
+
   quickActions: {
     display: "flex",
     gap: 12,
     flexWrap: "wrap",
     marginBottom: 24,
   },
+
   quickButton: {
     padding: "12px 18px",
     borderRadius: 12,
@@ -375,6 +421,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#f4d78b",
     fontWeight: 900,
   },
+
   card: {
     marginTop: 24,
     padding: 20,
@@ -382,25 +429,30 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(0,0,0,0.25)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
+
   saldo: {
     fontSize: 28,
     fontWeight: "bold",
     marginTop: 10,
   },
+
   infoText: {
     marginTop: 10,
     color: "#f4d78b",
     fontWeight: 700,
   },
+
   creditBox: {
     marginTop: 18,
   },
+
   creditButtons: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
     marginTop: 8,
   },
+
   buyButton: {
     padding: "10px 16px",
     borderRadius: 8,
@@ -410,6 +462,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#111",
     fontWeight: 800,
   },
+
   logoutButton: {
     padding: "10px 16px",
     borderRadius: 8,
@@ -418,13 +471,16 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     border: "none",
   },
+
   list: {
     marginTop: 10,
     paddingLeft: 18,
   },
+
   listItem: {
     marginBottom: 10,
   },
+
   error: {
     color: "#ff6b6b",
   },
