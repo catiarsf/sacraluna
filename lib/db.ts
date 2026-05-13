@@ -83,6 +83,16 @@ CREATE TABLE IF NOT EXISTS wallets (
   UNIQUE(user_type, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  wallet_id INTEGER NOT NULL,
+  session_id TEXT,
+  type TEXT NOT NULL,
+  amount_eur REAL NOT NULL,
+  description TEXT,
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
 CREATE TABLE IF NOT EXISTS chat_sessions (
   id TEXT PRIMARY KEY,
   cliente_id INTEGER,
@@ -104,16 +114,6 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   sender_role TEXT NOT NULL,
   text TEXT NOT NULL,
   sent_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
-);
-
-CREATE TABLE IF NOT EXISTS wallet_transactions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  wallet_id INTEGER NOT NULL,
-  session_id TEXT,
-  type TEXT NOT NULL,
-  amount_eur REAL NOT NULL,
-  description TEXT,
-  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
 CREATE TABLE IF NOT EXISTS pergunta_pedidos (
@@ -154,7 +154,11 @@ CREATE TABLE IF NOT EXISTS servicos (
   comissao_valor REAL NOT NULL DEFAULT 40,
   imagem_url TEXT,
   ativo INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+  prazo_estimado TEXT,
+  tipo_entrega TEXT DEFAULT 'ficheiro_texto',
+  campos_json TEXT,
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  updated_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS pedidos_servicos (
@@ -170,6 +174,63 @@ CREATE TABLE IF NOT EXISTS pedidos_servicos (
   created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
   paid_at INTEGER,
   FOREIGN KEY(servico_id) REFERENCES servicos(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS tickets_servicos (
+  id TEXT PRIMARY KEY,
+  pedido_servico_id TEXT,
+  cliente_id INTEGER,
+  cliente_nome TEXT,
+  cliente_email TEXT,
+  cliente_telefone TEXT,
+  consultor_id INTEGER NOT NULL,
+  servico_id INTEGER NOT NULL,
+  servico_nome TEXT NOT NULL,
+  preco_eur REAL NOT NULL DEFAULT 0,
+  estado TEXT NOT NULL DEFAULT 'pago',
+  prioridade TEXT NOT NULL DEFAULT 'normal',
+  dados_servico TEXT,
+  observacoes_cliente TEXT,
+  observacoes_internas TEXT,
+  stripe_session_id TEXT,
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  entregue_at INTEGER,
+  fechado_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS ticket_mensagens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id TEXT NOT NULL,
+  autor_tipo TEXT NOT NULL,
+  autor_id INTEGER,
+  mensagem TEXT NOT NULL,
+  visibilidade TEXT NOT NULL DEFAULT 'cliente_consultor_admin',
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+CREATE TABLE IF NOT EXISTS ticket_anexos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id TEXT NOT NULL,
+  enviado_por_tipo TEXT NOT NULL,
+  enviado_por_id INTEGER,
+  nome_ficheiro TEXT NOT NULL,
+  caminho_ficheiro TEXT NOT NULL,
+  tipo_ficheiro TEXT,
+  tamanho INTEGER DEFAULT 0,
+  visivel_cliente INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+CREATE TABLE IF NOT EXISTS notificacoes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  utilizador_tipo TEXT NOT NULL,
+  utilizador_id INTEGER NOT NULL,
+  titulo TEXT NOT NULL,
+  mensagem TEXT NOT NULL,
+  lida INTEGER NOT NULL DEFAULT 0,
+  link_interno TEXT,
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
 CREATE TABLE IF NOT EXISTS blog_posts (
@@ -235,6 +296,19 @@ try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_3_preco REAL NOT NULL DEF
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_4_qtd INTEGER NOT NULL DEFAULT 10;`); } catch {}
 try { db.exec(`ALTER TABLE consultores ADD COLUMN pack_4_preco REAL NOT NULL DEFAULT 10;`); } catch {}
 
+try { db.exec(`ALTER TABLE servicos ADD COLUMN consultor_id INTEGER;`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN preco_tipo TEXT NOT NULL DEFAULT 'fixo';`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN preco_texto TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN comissao_tipo TEXT NOT NULL DEFAULT 'percentagem';`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN comissao_valor REAL NOT NULL DEFAULT 40;`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN prazo_estimado TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN tipo_entrega TEXT DEFAULT 'ficheiro_texto';`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN campos_json TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE servicos ADD COLUMN updated_at INTEGER;`); } catch {}
+
+try { db.exec(`ALTER TABLE pedidos_servicos ADD COLUMN stripe_session_id TEXT;`); } catch {}
+try { db.exec(`ALTER TABLE pedidos_servicos ADD COLUMN paid_at INTEGER;`); } catch {}
+
 try { db.exec(`ALTER TABLE contactos ADD COLUMN telefone TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN assunto TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE contactos ADD COLUMN status TEXT NOT NULL DEFAULT 'novo';`); } catch {}
@@ -249,12 +323,6 @@ try { db.exec(`ALTER TABLE call_sessions ADD COLUMN billed INTEGER NOT NULL DEFA
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN recording_url TEXT;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN started_at INTEGER;`); } catch {}
 try { db.exec(`ALTER TABLE call_sessions ADD COLUMN ended_at INTEGER;`); } catch {}
-
-try { db.exec(`ALTER TABLE servicos ADD COLUMN consultor_id INTEGER;`); } catch {}
-try { db.exec(`ALTER TABLE servicos ADD COLUMN preco_tipo TEXT NOT NULL DEFAULT 'fixo';`); } catch {}
-try { db.exec(`ALTER TABLE servicos ADD COLUMN preco_texto TEXT;`); } catch {}
-try { db.exec(`ALTER TABLE servicos ADD COLUMN comissao_tipo TEXT NOT NULL DEFAULT 'percentagem';`); } catch {}
-try { db.exec(`ALTER TABLE servicos ADD COLUMN comissao_valor REAL NOT NULL DEFAULT 40;`); } catch {}
 
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;

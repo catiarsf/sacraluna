@@ -1,8 +1,10 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { db } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 function getStripe() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -18,6 +20,7 @@ function makePedidoId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
+
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
@@ -28,13 +31,29 @@ function norm(v: any) {
 export async function POST(req: Request) {
   try {
     const stripe = getStripe();
+    const sessionUser = await getSession();
+    const user = sessionUser?.user;
+
+    if (!user?.id) {
+      return NextResponse.json(
+        { ok: false, error: "Tens de iniciar sessão para comprar este serviço." },
+        { status: 401 }
+      );
+    }
+
+    if (user.role !== "cliente") {
+      return NextResponse.json(
+        { ok: false, error: "Apenas clientes podem comprar serviços." },
+        { status: 403 }
+      );
+    }
 
     const body = await req.json().catch(() => ({}));
 
     const servicoId = Number(body?.servico_id ?? 0);
-    const nomeCliente = norm(body?.nome_cliente);
-    const emailCliente = norm(body?.email_cliente);
-    const telefoneCliente = norm(body?.telefone_cliente);
+    const nomeCliente = norm(body?.nome_cliente || (user as any)?.nome);
+    const emailCliente = norm(body?.email_cliente || (user as any)?.email);
+    const telefoneCliente = norm(body?.telefone_cliente || (user as any)?.telefone);
     const notas = norm(body?.notas);
 
     if (!Number.isFinite(servicoId) || servicoId <= 0) {
@@ -78,14 +97,20 @@ export async function POST(req: Request) {
       .prepare(
         `
         SELECT
-          id,
-          nome,
-          descricao,
-          preco_eur,
-          imagem_url,
-          ativo
-        FROM servicos
-        WHERE id = ? AND ativo = 1
+          s.id,
+          s.nome,
+          s.descricao,
+          s.preco_tipo,
+          s.preco_eur,
+          s.preco_texto,
+          s.consultor_id,
+          s.imagem_url,
+          s.ativo,
+          c.nome AS consultor_nome
+        FROM servicos s
+        LEFT JOIN consultores c ON c.id = s.consultor_id
+        WHERE s.id = ?
+          AND s.ativo = 1
         LIMIT 1
         `
       )
@@ -95,6 +120,20 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { ok: false, error: "Serviço não encontrado ou inativo." },
         { status: 404 }
+      );
+    }
+
+    if (String(servico.preco_tipo ?? "fixo") !== "fixo") {
+      return NextResponse.json(
+        { ok: false, error: "Este serviço não pode ser comprado diretamente." },
+        { status: 400 }
+      );
+    }
+
+    if (!servico.consultor_id) {
+      return NextResponse.json(
+        { ok: false, error: "Este serviço não tem consultora associada." },
+        { status: 400 }
       );
     }
 
@@ -119,9 +158,10 @@ export async function POST(req: Request) {
         telefone_cliente,
         notas,
         preco_eur,
-        status
+        status,
+        created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente')
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente', strftime('%s','now'))
       `
     ).run(
       pedidoId,
@@ -134,14 +174,15 @@ export async function POST(req: Request) {
     );
 
     const successUrl =
-      `${siteUrl}/loja/${servicoId}` +
-      `?payment=success&pedido=${pedidoId}&session_id={CHECKOUT_SESSION_ID}`;
+      `${siteUrl}/cliente/servicos` +
+      `?payment=success&pedido=${encodeURIComponent(pedidoId)}` +
+      `&session_id={CHECKOUT_SESSION_ID}`;
 
     const cancelUrl =
       `${siteUrl}/loja/${servicoId}` +
-      `?payment=cancel&pedido=${pedidoId}`;
+      `?payment=cancel&pedido=${encodeURIComponent(pedidoId)}`;
 
-    const session = await stripe.checkout.sessions.create({
+    const stripeSession = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: emailCliente,
       line_items: [
@@ -158,12 +199,12 @@ export async function POST(req: Request) {
         },
       ],
       metadata: {
-        kind: "servico",
+        kind: "servico_ticket",
         pedidoId,
         servicoId: String(servicoId),
-        nomeCliente,
-        emailCliente,
-        telefoneCliente,
+        clienteId: String(user.id),
+        consultorId: String(servico.consultor_id),
+        amount: String(preco),
       },
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -175,11 +216,11 @@ export async function POST(req: Request) {
       SET stripe_session_id = ?
       WHERE id = ?
       `
-    ).run(session.id ?? null, pedidoId);
+    ).run(stripeSession.id ?? null, pedidoId);
 
     return NextResponse.json({
       ok: true,
-      url: session.url,
+      url: stripeSession.url,
       pedido_id: pedidoId,
     });
   } catch (e: any) {

@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import Stripe from "stripe";
 import { headers } from "next/headers";
@@ -9,13 +10,8 @@ function getStripeConfig() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  if (!secretKey) {
-    throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
-  }
-
-  if (!webhookSecret) {
-    throw new Error("Falta STRIPE_WEBHOOK_SECRET no .env.local");
-  }
+  if (!secretKey) throw new Error("Falta STRIPE_SECRET_KEY no .env.local");
+  if (!webhookSecret) throw new Error("Falta STRIPE_WEBHOOK_SECRET no .env.local");
 
   return {
     stripe: new Stripe(secretKey),
@@ -34,6 +30,14 @@ function toNumber(v: any) {
 
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function makeId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function ensureWallet(userType: string, userId: number) {
@@ -242,21 +246,10 @@ function processPerguntaCheckout(session: Stripe.Checkout.Session) {
   const clienteId = toNumber(session.metadata?.clienteId);
   const amount = toNumber(session.metadata?.amount);
 
-  if (!pedidoId) {
-    throw new Error("pedidoId em falta no metadata do pagamento da pergunta.");
-  }
-
-  if (!consultorId || consultorId <= 0) {
-    throw new Error("consultorId inválido no metadata do pagamento da pergunta.");
-  }
-
-  if (!clienteId || clienteId <= 0) {
-    throw new Error("clienteId inválido no metadata do pagamento da pergunta.");
-  }
-
-  if (!amount || amount <= 0) {
-    throw new Error("amount inválido no metadata do pagamento da pergunta.");
-  }
+  if (!pedidoId) throw new Error("pedidoId em falta no metadata da pergunta.");
+  if (!consultorId || consultorId <= 0) throw new Error("consultorId inválido.");
+  if (!clienteId || clienteId <= 0) throw new Error("clienteId inválido.");
+  if (!amount || amount <= 0) throw new Error("amount inválido.");
 
   const pedido = db
     .prepare(
@@ -270,7 +263,7 @@ function processPerguntaCheckout(session: Stripe.Checkout.Session) {
     .get(pedidoId) as any;
 
   if (!pedido) {
-    throw new Error("Pedido não encontrado no webhook.");
+    throw new Error("Pedido de perguntas não encontrado no webhook.");
   }
 
   if (
@@ -299,6 +292,244 @@ function processPerguntaCheckout(session: Stripe.Checkout.Session) {
     duplicate: false,
     pedidoId,
     consultorId,
+    amount,
+  };
+}
+
+function processServicoTicket(session: Stripe.Checkout.Session) {
+  const kind = norm(session.metadata?.kind);
+
+  if (kind !== "servico_ticket" && kind !== "servico") {
+    return { handled: false, reason: "kind não é servico_ticket/servico" };
+  }
+
+  if (norm(session.payment_status) !== "paid") {
+    return {
+      handled: false,
+      reason: `payment_status=${norm(session.payment_status)}`,
+    };
+  }
+
+  const pedidoId = norm(session.metadata?.pedidoId);
+  const servicoId = toNumber(session.metadata?.servicoId);
+  const clienteId = toNumber(session.metadata?.clienteId);
+  const consultorId = toNumber(session.metadata?.consultorId);
+  const amount = toNumber(session.metadata?.amount);
+
+  if (!pedidoId) throw new Error("pedidoId em falta no pagamento do serviço.");
+  if (!servicoId || servicoId <= 0) throw new Error("servicoId inválido.");
+  if (!consultorId || consultorId <= 0) throw new Error("consultorId inválido.");
+  if (!amount || amount <= 0) throw new Error("amount inválido no serviço.");
+
+  const pedido = db
+    .prepare(
+      `
+      SELECT *
+      FROM pedidos_servicos
+      WHERE id = ?
+      LIMIT 1
+      `
+    )
+    .get(pedidoId) as any;
+
+  if (!pedido) {
+    throw new Error("Pedido de serviço não encontrado.");
+  }
+
+  const servico = db
+    .prepare(
+      `
+      SELECT
+        s.*,
+        c.nome AS consultor_nome
+      FROM servicos s
+      LEFT JOIN consultores c ON c.id = s.consultor_id
+      WHERE s.id = ?
+      LIMIT 1
+      `
+    )
+    .get(servicoId) as any;
+
+  if (!servico) {
+    throw new Error("Serviço não encontrado.");
+  }
+
+  const existingTicket = db
+    .prepare(
+      `
+      SELECT id
+      FROM tickets_servicos
+      WHERE pedido_servico_id = ?
+         OR stripe_session_id = ?
+      LIMIT 1
+      `
+    )
+    .get(pedidoId, session.id ?? "") as any;
+
+  if (existingTicket?.id) {
+    return {
+      handled: true,
+      duplicate: true,
+      ticketId: String(existingTicket.id),
+      pedidoId,
+    };
+  }
+
+  const cliente = clienteId
+    ? (db
+        .prepare(
+          `
+          SELECT id, nome, email, telefone
+          FROM users
+          WHERE id = ?
+          LIMIT 1
+          `
+        )
+        .get(clienteId) as any)
+    : null;
+
+  const ticketId = makeId();
+
+  const clienteNome =
+    norm(cliente?.nome) || norm(pedido.nome_cliente) || "Cliente";
+
+  const clienteEmail =
+    norm(cliente?.email) || norm(pedido.email_cliente) || "";
+
+  const clienteTelefone =
+    norm(cliente?.telefone) || norm(pedido.telefone_cliente) || "";
+
+  const dadosServico = JSON.stringify({
+    nome_cliente: clienteNome,
+    email_cliente: clienteEmail,
+    telefone_cliente: clienteTelefone,
+    notas: norm(pedido.notas),
+    stripe_session_id: session.id,
+  });
+
+  db.transaction(() => {
+    db.prepare(
+      `
+      UPDATE pedidos_servicos
+      SET
+        status = 'pago',
+        stripe_session_id = COALESCE(stripe_session_id, ?),
+        paid_at = strftime('%s','now')
+      WHERE id = ?
+      `
+    ).run(session.id ?? null, pedidoId);
+
+    db.prepare(
+      `
+      INSERT INTO tickets_servicos (
+        id,
+        pedido_servico_id,
+        cliente_id,
+        cliente_nome,
+        cliente_email,
+        cliente_telefone,
+        consultor_id,
+        servico_id,
+        servico_nome,
+        preco_eur,
+        estado,
+        prioridade,
+        dados_servico,
+        observacoes_cliente,
+        stripe_session_id,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pago', 'normal', ?, ?, ?, strftime('%s','now'), strftime('%s','now'))
+      `
+    ).run(
+      ticketId,
+      pedidoId,
+      clienteId || null,
+      clienteNome,
+      clienteEmail,
+      clienteTelefone,
+      consultorId,
+      servicoId,
+      String(servico.nome ?? "Serviço"),
+      round2(amount),
+      dadosServico,
+      norm(pedido.notas),
+      session.id ?? null
+    );
+
+    db.prepare(
+      `
+      INSERT INTO ticket_mensagens (
+        ticket_id,
+        autor_tipo,
+        autor_id,
+        mensagem,
+        visibilidade,
+        created_at
+      )
+      VALUES (?, 'sistema', NULL, ?, 'cliente_consultor_admin', strftime('%s','now'))
+      `
+    ).run(
+      ticketId,
+      `Pagamento confirmado. Pedido de serviço criado para ${String(
+        servico.nome ?? "Serviço"
+      )}.`
+    );
+
+    db.prepare(
+      `
+      INSERT INTO notificacoes (
+        utilizador_tipo,
+        utilizador_id,
+        titulo,
+        mensagem,
+        lida,
+        link_interno,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, 0, ?, strftime('%s','now'))
+      `
+    ).run(
+      "consultor",
+      consultorId,
+      "Novo pedido de serviço",
+      `Tens um novo pedido de ${String(servico.nome ?? "serviço")} para realizar.`,
+      `/consultor/servicos/${ticketId}`
+    );
+
+    if (clienteId && clienteId > 0) {
+      db.prepare(
+        `
+        INSERT INTO notificacoes (
+          utilizador_tipo,
+          utilizador_id,
+          titulo,
+          mensagem,
+          lida,
+          link_interno,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, 0, ?, strftime('%s','now'))
+        `
+      ).run(
+        "cliente",
+        clienteId,
+        "Serviço comprado",
+        `O teu pedido de ${String(servico.nome ?? "serviço")} foi recebido.`,
+        `/cliente/servicos/${ticketId}`
+      );
+    }
+  })();
+
+  return {
+    handled: true,
+    duplicate: false,
+    ticketId,
+    pedidoId,
+    servicoId,
+    consultorId,
+    clienteId,
     amount,
   };
 }
@@ -387,6 +618,7 @@ export async function POST(req: Request) {
 
     if (alreadyProcessed) {
       console.log("WEBHOOK DUPLICADO IGNORADO:", event.id);
+
       return NextResponse.json({
         ok: true,
         duplicate: true,
@@ -414,7 +646,16 @@ export async function POST(req: Request) {
         console.log("RESULTADO PERGUNTA:", perguntaResult);
       }
 
-      if (!walletResult.handled && !perguntaResult.handled) {
+      const servicoResult = processServicoTicket(session);
+      if (servicoResult.handled) {
+        console.log("RESULTADO SERVIÇO/TICKET:", servicoResult);
+      }
+
+      if (
+        !walletResult.handled &&
+        !perguntaResult.handled &&
+        !servicoResult.handled
+      ) {
         console.log("EVENTO RECEBIDO MAS IGNORADO:", {
           eventType: event.type,
           metadata: session.metadata,
@@ -451,6 +692,7 @@ export async function POST(req: Request) {
     });
   } catch (err: any) {
     console.error("ERRO AO PROCESSAR WEBHOOK:", err?.message || err);
+
     return new NextResponse(`Erro interno no webhook: ${err.message}`, {
       status: 500,
     });
