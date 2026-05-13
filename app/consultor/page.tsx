@@ -442,6 +442,13 @@ export default function ConsultorPage() {
           >
             Histórico voz
           </button>
+        
+         <button
+  style={styles.alertBtn}
+  onClick={() => router.push("/consultor/tickets")}
+>
+  📦 Serviços / Tickets
+</button>
 
           <button style={styles.logoutBtn} onClick={terminarSessao}>
             Terminar sessão
