@@ -1,51 +1,57 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { getSession } from "@/lib/auth";
 import db from "@/lib/db";
 
-export async function GET(
-  req: Request,
-  ctx: { params: Promise<{ ticketId: string }> }
-) {
+type Ctx = {
+  params: Promise<{ ticketId: string }>;
+};
+
+export async function GET(_req: Request, ctx: Ctx) {
   try {
-    const params = await ctx.params;
-    const ticketId = String(params.ticketId || "").trim();
+    const { ticketId } = await ctx.params;
 
-    const cookieStore = await cookies();
+    const session = await getSession();
+    const user = session?.user;
 
-    const clienteId = Number(
-      cookieStore.get("cliente_id")?.value || 0
-    );
-
-    if (!clienteId) {
+    if (!user?.id) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Não autenticado.",
-        },
-        {
-          status: 401,
-        }
+        { ok: false, error: "Não autenticado." },
+        { status: 401 }
       );
     }
+
+    if (user.role !== "cliente") {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão." },
+        { status: 403 }
+      );
+    }
+
+    const clienteId = Number(user.id);
 
     const ticket = db
       .prepare(
         `
         SELECT
-          ts.*,
-          s.nome AS servico_nome,
-          s.descricao AS servico_descricao,
+          t.id,
+          t.estado,
+          t.prioridade,
+          t.servico_nome,
+          COALESCE(s.descricao, '') AS servico_descricao,
           c.nome AS consultor_nome,
-          c.foto_url AS consultor_foto
-        FROM tickets_servicos ts
-        LEFT JOIN servicos s
-          ON s.id = ts.servico_id
-        LEFT JOIN consultores c
-          ON c.id = ts.consultor_id
-        WHERE ts.id = ?
-          AND ts.cliente_id = ?
+          t.preco_eur,
+          t.observacoes_cliente,
+          t.created_at,
+          t.updated_at,
+          t.entregue_at
+        FROM tickets_servicos t
+        LEFT JOIN servicos s ON s.id = t.servico_id
+        LEFT JOIN consultores c ON c.id = t.consultor_id
+        WHERE t.id = ?
+          AND t.cliente_id = ?
         LIMIT 1
         `
       )
@@ -53,13 +59,8 @@ export async function GET(
 
     if (!ticket) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Ticket não encontrado.",
-        },
-        {
-          status: 404,
-        }
+        { ok: false, error: "Pedido não encontrado." },
+        { status: 404 }
       );
     }
 
@@ -75,8 +76,8 @@ export async function GET(
           created_at
         FROM ticket_mensagens
         WHERE ticket_id = ?
-          AND visibilidade != 'apenas_admin'
-        ORDER BY created_at ASC
+          AND visibilidade = 'cliente_consultor_admin'
+        ORDER BY created_at ASC, id ASC
         `
       )
       .all(ticketId) as any[];
@@ -86,38 +87,57 @@ export async function GET(
         `
         SELECT
           id,
-          enviado_por_tipo,
           nome_ficheiro,
           caminho_ficheiro,
           tipo_ficheiro,
           tamanho,
-          visivel_cliente,
           created_at
         FROM ticket_anexos
         WHERE ticket_id = ?
           AND visivel_cliente = 1
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         `
       )
       .all(ticketId) as any[];
 
     return NextResponse.json({
       ok: true,
-      ticket,
-      mensagens,
-      anexos,
+      ticket: {
+        id: String(ticket.id),
+        estado: String(ticket.estado ?? ""),
+        prioridade: String(ticket.prioridade ?? "normal"),
+        servico_nome: String(ticket.servico_nome ?? "Serviço"),
+        servico_descricao: String(ticket.servico_descricao ?? ""),
+        consultor_nome: String(ticket.consultor_nome ?? "SacraLuna"),
+        preco_eur: Number(ticket.preco_eur ?? 0),
+        observacoes_cliente: String(ticket.observacoes_cliente ?? ""),
+        created_at: Number(ticket.created_at ?? 0),
+        updated_at: Number(ticket.updated_at ?? 0),
+        entregue_at: ticket.entregue_at ? Number(ticket.entregue_at) : null,
+      },
+      mensagens: mensagens.map((m) => ({
+        id: Number(m.id),
+        autor_tipo: String(m.autor_tipo ?? ""),
+        autor_id: m.autor_id ? Number(m.autor_id) : null,
+        mensagem: String(m.mensagem ?? ""),
+        visibilidade: String(m.visibilidade ?? ""),
+        created_at: Number(m.created_at ?? 0),
+      })),
+      anexos: anexos.map((a) => ({
+        id: Number(a.id),
+        nome_ficheiro: String(a.nome_ficheiro ?? ""),
+        caminho_ficheiro: String(a.caminho_ficheiro ?? ""),
+        tipo_ficheiro: String(a.tipo_ficheiro ?? ""),
+        tamanho: Number(a.tamanho ?? 0),
+        created_at: Number(a.created_at ?? 0),
+      })),
     });
   } catch (e: any) {
-    console.error(e);
+    console.error("ERRO GET /api/cliente/tickets/[ticketId]:", e);
 
     return NextResponse.json(
-      {
-        ok: false,
-        error: e?.message || "Erro interno.",
-      },
-      {
-        status: 500,
-      }
+      { ok: false, error: e?.message || "Erro ao carregar pedido." },
+      { status: 500 }
     );
   }
 }

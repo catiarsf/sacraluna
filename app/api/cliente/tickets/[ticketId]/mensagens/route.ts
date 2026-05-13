@@ -1,157 +1,126 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { getSession } from "@/lib/auth";
 import db from "@/lib/db";
 
-function norm(v: any) {
-  return String(v ?? "").trim();
-}
+type Ctx = {
+  params: Promise<{ ticketId: string }>;
+};
 
-export async function POST(
-  req: Request,
-  ctx: { params: Promise<{ ticketId: string }> }
-) {
+export async function POST(req: Request, ctx: Ctx) {
   try {
-    const params = await ctx.params;
-    const ticketId = norm(params.ticketId);
+    const { ticketId } = await ctx.params;
 
-    const cookieStore = await cookies();
+    const session = await getSession();
+    const user = session?.user;
 
-    const clienteId = Number(
-      cookieStore.get("cliente_id")?.value || 0
-    );
-
-    if (!clienteId) {
+    if (!user?.id) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Não autenticado.",
-        },
-        {
-          status: 401,
-        }
+        { ok: false, error: "Não autenticado." },
+        { status: 401 }
       );
     }
 
-    const body = await req.json().catch(() => ({}));
+    if (user.role !== "cliente") {
+      return NextResponse.json(
+        { ok: false, error: "Sem permissão." },
+        { status: 403 }
+      );
+    }
 
-    const mensagem = norm(body?.mensagem);
+    const clienteId = Number(user.id);
+
+    const body = await req.json().catch(() => ({}));
+    const mensagem = String(body?.mensagem ?? "").trim();
 
     if (!mensagem) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Mensagem vazia.",
-        },
-        {
-          status: 400,
-        }
+        { ok: false, error: "Mensagem vazia." },
+        { status: 400 }
       );
     }
 
     const ticket = db
       .prepare(
         `
-        SELECT
-          id,
-          cliente_id,
-          estado
+        SELECT id, cliente_id, consultor_id, servico_nome, estado
         FROM tickets_servicos
         WHERE id = ?
+          AND cliente_id = ?
         LIMIT 1
         `
       )
-      .get(ticketId) as any;
+      .get(ticketId, clienteId) as any;
 
     if (!ticket) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Ticket não encontrado.",
-        },
-        {
-          status: 404,
-        }
+        { ok: false, error: "Pedido não encontrado." },
+        { status: 404 }
       );
     }
 
-    if (Number(ticket.cliente_id) !== clienteId) {
+    if (["cancelado", "concluido"].includes(String(ticket.estado ?? ""))) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Sem permissão.",
-        },
-        {
-          status: 403,
-        }
+        { ok: false, error: "Este pedido já está fechado." },
+        { status: 400 }
       );
     }
 
-    if (
-      [
-        "cancelado",
-        "concluido",
-      ].includes(String(ticket.estado))
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Este ticket está fechado.",
-        },
-        {
-          status: 400,
-        }
+    db.transaction(() => {
+      db.prepare(
+        `
+        INSERT INTO ticket_mensagens (
+          ticket_id,
+          autor_tipo,
+          autor_id,
+          mensagem,
+          visibilidade,
+          created_at
+        )
+        VALUES (?, 'cliente', ?, ?, 'cliente_consultor_admin', strftime('%s','now'))
+        `
+      ).run(ticketId, clienteId, mensagem);
+
+      db.prepare(
+        `
+        UPDATE tickets_servicos
+        SET updated_at = strftime('%s','now')
+        WHERE id = ?
+        `
+      ).run(ticketId);
+
+      db.prepare(
+        `
+        INSERT INTO notificacoes (
+          utilizador_tipo,
+          utilizador_id,
+          titulo,
+          mensagem,
+          lida,
+          link_interno,
+          created_at
+        )
+        VALUES ('consultor', ?, ?, ?, 0, ?, strftime('%s','now'))
+        `
+      ).run(
+        Number(ticket.consultor_id),
+        "Nova mensagem de cliente",
+        `Tens uma nova mensagem no pedido ${String(ticket.servico_nome ?? "serviço")}.`,
+        `/consultor/tickets/${ticketId}`
       );
-    }
-
-    db.prepare(
-      `
-      INSERT INTO ticket_mensagens (
-        ticket_id,
-        autor_tipo,
-        autor_id,
-        mensagem,
-        visibilidade,
-        created_at
-      )
-      VALUES (
-        ?,
-        'cliente',
-        ?,
-        ?,
-        'cliente_consultor_admin',
-        strftime('%s','now')
-      )
-      `
-    ).run(
-      ticketId,
-      clienteId,
-      mensagem
-    );
-
-    db.prepare(
-      `
-      UPDATE tickets_servicos
-      SET updated_at = strftime('%s','now')
-      WHERE id = ?
-      `
-    ).run(ticketId);
+    })();
 
     return NextResponse.json({
       ok: true,
     });
   } catch (e: any) {
-    console.error(e);
+    console.error("ERRO POST /api/cliente/tickets/[ticketId]/mensagens:", e);
 
     return NextResponse.json(
-      {
-        ok: false,
-        error: e?.message || "Erro interno.",
-      },
-      {
-        status: 500,
-      }
+      { ok: false, error: e?.message || "Erro ao enviar mensagem." },
+      { status: 500 }
     );
   }
 }

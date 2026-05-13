@@ -7,19 +7,14 @@ type Ticket = {
   id: string;
   estado: string;
   prioridade: string;
-
   cliente_nome: string;
   cliente_email: string;
   cliente_telefone: string;
-
   servico_nome: string;
   servico_descricao: string;
-
   preco_eur: number;
-
   observacoes_cliente: string;
   observacoes_internas: string;
-
   created_at: number;
   updated_at: number;
   entregue_at: number | null;
@@ -54,14 +49,13 @@ export default function ConsultorTicketDetalhePage() {
 
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
-
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [anexos, setAnexos] = useState<Anexo[]>([]);
-
   const [novaMensagem, setNovaMensagem] = useState("");
   const [estadoLoading, setEstadoLoading] = useState(false);
   const [mensagemLoading, setMensagemLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
 
   async function carregar() {
     try {
@@ -113,9 +107,7 @@ export default function ConsultorTicketDetalhePage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          estado,
-        }),
+        body: JSON.stringify({ estado }),
       });
 
       const json = await res.json().catch(() => null);
@@ -143,9 +135,7 @@ export default function ConsultorTicketDetalhePage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          mensagem: novaMensagem,
-        }),
+        body: JSON.stringify({ mensagem: novaMensagem }),
       });
 
       const json = await res.json().catch(() => null);
@@ -155,12 +145,43 @@ export default function ConsultorTicketDetalhePage() {
       }
 
       setNovaMensagem("");
-
       await carregar();
     } catch (e: any) {
       alert(e?.message || "Erro ao enviar mensagem.");
     } finally {
       setMensagemLoading(false);
+    }
+  }
+
+  async function enviarFicheiro(e: React.ChangeEvent<HTMLInputElement>) {
+    try {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      setUploadLoading(true);
+
+      const res = await fetch(`/api/consultor/tickets/${ticketId}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Erro ao enviar ficheiro.");
+      }
+
+      alert("Ficheiro enviado e serviço marcado como entregue.");
+      e.target.value = "";
+
+      await carregar();
+    } catch (e: any) {
+      alert(e?.message || "Erro ao enviar ficheiro.");
+    } finally {
+      setUploadLoading(false);
     }
   }
 
@@ -185,54 +206,27 @@ export default function ConsultorTicketDetalhePage() {
       <div style={styles.top}>
         <div>
           <div style={styles.badge}>{ticket.estado}</div>
-
           <h1 style={styles.h1}>{ticket.servico_nome}</h1>
-
-          <div style={styles.meta}>
-            Cliente: <b>{ticket.cliente_nome}</b>
-          </div>
-
-          <div style={styles.meta}>
-            Criado: {formatDate(ticket.created_at)}
-          </div>
-
-          <div style={styles.meta}>
-            Atualizado: {formatDate(ticket.updated_at)}
-          </div>
-
+          <div style={styles.meta}>Cliente: <b>{ticket.cliente_nome}</b></div>
+          <div style={styles.meta}>Criado: {formatDate(ticket.created_at)}</div>
+          <div style={styles.meta}>Atualizado: {formatDate(ticket.updated_at)}</div>
           {ticket.entregue_at ? (
-            <div style={styles.meta}>
-              Entregue: {formatDate(ticket.entregue_at)}
-            </div>
+            <div style={styles.meta}>Entregue: {formatDate(ticket.entregue_at)}</div>
           ) : null}
         </div>
 
         <div style={styles.side}>
-          <div style={styles.price}>
-            {Number(ticket.preco_eur ?? 0).toFixed(2)}€
-          </div>
+          <div style={styles.price}>{Number(ticket.preco_eur ?? 0).toFixed(2)}€</div>
 
-          <button
-            style={styles.stateBtn}
-            onClick={() => alterarEstado("em_analise")}
-            disabled={estadoLoading}
-          >
+          <button style={styles.stateBtn} onClick={() => alterarEstado("em_analise")} disabled={estadoLoading}>
             Em análise
           </button>
 
-          <button
-            style={styles.stateBtn}
-            onClick={() => alterarEstado("em_execucao")}
-            disabled={estadoLoading}
-          >
+          <button style={styles.stateBtn} onClick={() => alterarEstado("em_execucao")} disabled={estadoLoading}>
             Em execução
           </button>
 
-          <button
-            style={styles.finishBtn}
-            onClick={() => alterarEstado("entregue")}
-            disabled={estadoLoading}
-          >
+          <button style={styles.finishBtn} onClick={() => alterarEstado("entregue")} disabled={estadoLoading}>
             Marcar como entregue
           </button>
         </div>
@@ -241,25 +235,13 @@ export default function ConsultorTicketDetalhePage() {
       <div style={styles.grid}>
         <section style={styles.card}>
           <h2 style={styles.h2}>Informações do cliente</h2>
-
-          <div style={styles.infoRow}>
-            <b>Nome:</b> {ticket.cliente_nome}
-          </div>
-
-          <div style={styles.infoRow}>
-            <b>Email:</b> {ticket.cliente_email}
-          </div>
-
-          <div style={styles.infoRow}>
-            <b>Telefone:</b> {ticket.cliente_telefone}
-          </div>
+          <div style={styles.infoRow}><b>Nome:</b> {ticket.cliente_nome}</div>
+          <div style={styles.infoRow}><b>Email:</b> {ticket.cliente_email}</div>
+          <div style={styles.infoRow}><b>Telefone:</b> {ticket.cliente_telefone}</div>
 
           <div style={styles.infoBox}>
             <b>Observações do cliente</b>
-
-            <div style={styles.preWrap}>
-              {ticket.observacoes_cliente || "Sem observações."}
-            </div>
+            <div style={styles.preWrap}>{ticket.observacoes_cliente || "Sem observações."}</div>
           </div>
         </section>
 
@@ -268,18 +250,14 @@ export default function ConsultorTicketDetalhePage() {
 
           <div style={styles.messages}>
             {mensagens.length === 0 ? (
-              <div style={styles.empty}>
-                Ainda não existem mensagens.
-              </div>
+              <div style={styles.empty}>Ainda não existem mensagens.</div>
             ) : (
               mensagens.map((m) => (
                 <div key={m.id} style={styles.message}>
                   <div style={styles.messageTop}>
                     <b>{m.autor_tipo}</b>
-
                     <span>{formatDate(m.created_at)}</span>
                   </div>
-
                   <div style={styles.preWrap}>{m.mensagem}</div>
                 </div>
               ))
@@ -293,11 +271,7 @@ export default function ConsultorTicketDetalhePage() {
             placeholder="Escreve uma atualização para o cliente..."
           />
 
-          <button
-            style={styles.sendBtn}
-            onClick={enviarMensagem}
-            disabled={mensagemLoading}
-          >
+          <button style={styles.sendBtn} onClick={enviarMensagem} disabled={mensagemLoading}>
             {mensagemLoading ? "A enviar..." : "Enviar mensagem"}
           </button>
         </section>
@@ -307,34 +281,30 @@ export default function ConsultorTicketDetalhePage() {
         <div style={styles.attachTop}>
           <h2 style={styles.h2}>Entregas / anexos</h2>
 
-          <button style={styles.uploadBtn}>
-            Upload ficheiro (fase seguinte)
-          </button>
+          <label style={styles.uploadBtn}>
+            {uploadLoading ? "A enviar..." : "Enviar ficheiro"}
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+              onChange={enviarFicheiro}
+              disabled={uploadLoading}
+              style={{ display: "none" }}
+            />
+          </label>
         </div>
 
         {anexos.length === 0 ? (
-          <div style={styles.empty}>
-            Ainda não existem ficheiros enviados.
-          </div>
+          <div style={styles.empty}>Ainda não existem ficheiros enviados.</div>
         ) : (
           <div style={styles.attachments}>
             {anexos.map((a) => (
               <div key={a.id} style={styles.attachment}>
                 <div>
-                  <div style={styles.attachmentName}>
-                    {a.nome_ficheiro}
-                  </div>
-
-                  <div style={styles.attachmentDate}>
-                    {formatDate(a.created_at)}
-                  </div>
+                  <div style={styles.attachmentName}>{a.nome_ficheiro}</div>
+                  <div style={styles.attachmentDate}>{formatDate(a.created_at)}</div>
                 </div>
 
-                <a
-                  href={a.caminho_ficheiro}
-                  target="_blank"
-                  style={styles.downloadBtn}
-                >
+                <a href={a.caminho_ficheiro} target="_blank" style={styles.downloadBtn}>
                   Abrir
                 </a>
               </div>
@@ -354,7 +324,6 @@ const styles: Record<string, React.CSSProperties> = {
     background:
       "radial-gradient(1100px 650px at 50% 75%, rgba(25,70,140,0.55) 0%, rgba(10,16,28,1) 55%)",
   },
-
   top: {
     display: "flex",
     justifyContent: "space-between",
@@ -362,7 +331,6 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 20,
   },
-
   badge: {
     display: "inline-flex",
     padding: "6px 10px",
@@ -374,32 +342,27 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     marginBottom: 12,
   },
-
   h1: {
     margin: 0,
     fontSize: 34,
     fontWeight: 950,
     color: "#f4d78b",
   },
-
   meta: {
     marginTop: 8,
     opacity: 0.9,
   },
-
   side: {
     display: "grid",
     gap: 10,
     alignContent: "start",
   },
-
   price: {
     fontSize: 34,
     fontWeight: 950,
     color: "#f4d78b",
     marginBottom: 6,
   },
-
   stateBtn: {
     padding: "12px 14px",
     borderRadius: 12,
@@ -409,7 +372,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     cursor: "pointer",
   },
-
   finishBtn: {
     padding: "12px 14px",
     borderRadius: 12,
@@ -419,32 +381,27 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
     gap: 20,
     marginBottom: 20,
   },
-
   card: {
     padding: 18,
     borderRadius: 18,
     background: "rgba(0,0,0,0.25)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
-
   h2: {
     marginTop: 0,
     marginBottom: 14,
     fontSize: 24,
     fontWeight: 900,
   },
-
   infoRow: {
     marginBottom: 10,
   },
-
   infoBox: {
     marginTop: 16,
     padding: 14,
@@ -452,26 +409,22 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
-
   preWrap: {
     marginTop: 8,
     whiteSpace: "pre-wrap",
     lineHeight: 1.6,
   },
-
   messages: {
     display: "grid",
     gap: 12,
     marginBottom: 16,
   },
-
   message: {
     padding: 14,
     borderRadius: 14,
     background: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
-
   messageTop: {
     display: "flex",
     justifyContent: "space-between",
@@ -480,7 +433,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     opacity: 0.82,
   },
-
   textarea: {
     width: "100%",
     minHeight: 120,
@@ -492,7 +444,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#fff",
     outline: "none",
   },
-
   sendBtn: {
     marginTop: 12,
     padding: "12px 16px",
@@ -503,7 +454,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-
   attachTop: {
     display: "flex",
     justifyContent: "space-between",
@@ -511,21 +461,19 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     alignItems: "center",
   },
-
   uploadBtn: {
     padding: "12px 14px",
     borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.06)",
-    color: "#fff",
-    fontWeight: 800,
+    border: "1px solid rgba(212,175,55,0.55)",
+    background: "#f4d78b",
+    color: "#111",
+    fontWeight: 900,
+    cursor: "pointer",
   },
-
   attachments: {
     display: "grid",
     gap: 12,
   },
-
   attachment: {
     display: "flex",
     justifyContent: "space-between",
@@ -536,17 +484,14 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(255,255,255,0.04)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
-
   attachmentName: {
     fontWeight: 800,
   },
-
   attachmentDate: {
     marginTop: 4,
     opacity: 0.7,
     fontSize: 13,
   },
-
   downloadBtn: {
     padding: "10px 14px",
     borderRadius: 10,
@@ -556,11 +501,9 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#f4d78b",
     fontWeight: 900,
   },
-
   empty: {
     opacity: 0.7,
   },
-
   err: {
     padding: 18,
     borderRadius: 16,
