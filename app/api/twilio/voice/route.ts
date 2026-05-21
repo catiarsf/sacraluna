@@ -33,13 +33,12 @@ export async function POST(req: Request) {
     const callSessionId = String(searchParams.get("callSessionId") || "").trim();
     const maxSeconds = Number(searchParams.get("maxSeconds") || 0);
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
     const twilioPhoneNumber = normPhone(process.env.TWILIO_PHONE_NUMBER);
 
-    if (!siteUrl || !twilioPhoneNumber || !twilioPhoneNumber.startsWith("+")) {
+    if (!twilioPhoneNumber || !twilioPhoneNumber.startsWith("+")) {
       return xml(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say language="pt-PT">Configuração da chamada incompleta.</Say>
+  <Say language="pt">Configuração da chamada incompleta.</Say>
   <Hangup/>
 </Response>`);
     }
@@ -47,7 +46,7 @@ export async function POST(req: Request) {
     if (!consultorId || !clienteId || !callSessionId) {
       return xml(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say language="pt-PT">Dados da chamada inválidos.</Say>
+  <Say language="pt">Dados da chamada inválidos.</Say>
   <Hangup/>
 </Response>`);
     }
@@ -66,7 +65,7 @@ export async function POST(req: Request) {
     if (!cliente?.telefone) {
       return xml(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say language="pt-PT">O número do cliente não está disponível.</Say>
+  <Say language="pt">O número do cliente não está disponível.</Say>
   <Hangup/>
 </Response>`);
     }
@@ -77,36 +76,19 @@ export async function POST(req: Request) {
     if (!clienteTelefone.startsWith("+")) {
       return xml(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say language="pt-PT">O número do cliente não está válido.</Say>
+  <Say language="pt">O número do cliente não está válido.</Say>
   <Hangup/>
 </Response>`);
     }
-
-    const statusCallback =
-      `${siteUrl}/api/twilio/status` +
-      `?consultorId=${consultorId}` +
-      `&clienteId=${clienteId}` +
-      `&callSessionId=${encodeURIComponent(callSessionId)}`;
-
-    const recordingCallback = statusCallback;
 
     const timeLimitAttr = maxSeconds > 0 ? ` timeLimit="${maxSeconds}"` : "";
 
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say language="pt-PT">Nova consulta da plataforma SacraLuna.</Say>
-  <Say language="pt-PT">A ligar ao cliente ${clienteNome}.</Say>
-  <Dial
-    callerId="${twilioPhoneNumber}"
-    answerOnBridge="true"${timeLimitAttr}
-    timeout="25"
-    record="record-from-answer"
-    recordingStatusCallback="${recordingCallback}"
-    recordingStatusCallbackMethod="POST"
-    action="${statusCallback}"
-    method="POST"
-  >
-    <Number>${clienteTelefone}</Number>
+  <Say language="pt">Nova consulta SacraLuna.</Say>
+  <Say language="pt">A ligar ao cliente ${clienteNome}.</Say>
+  <Dial callerId="${twilioPhoneNumber}" answerOnBridge="true" timeout="20"${timeLimitAttr}>
+    ${clienteTelefone}
   </Dial>
 </Response>`;
 
@@ -116,7 +98,7 @@ export async function POST(req: Request) {
 
     return xml(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say language="pt-PT">Erro ao estabelecer a chamada.</Say>
+  <Say language="pt">Erro ao estabelecer a chamada.</Say>
   <Hangup/>
 </Response>`);
   }
