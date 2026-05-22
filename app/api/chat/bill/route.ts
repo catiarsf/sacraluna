@@ -5,6 +5,10 @@ function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function round4(value: number) {
+  return Math.round((value + Number.EPSILON) * 10000) / 10000;
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -18,13 +22,7 @@ export async function POST(req: Request) {
     }
 
     const session = db
-      .prepare(
-        `
-        SELECT *
-        FROM chat_sessions
-        WHERE id = ?
-        `
-      )
+      .prepare(`SELECT * FROM chat_sessions WHERE id = ?`)
       .get(sessionId) as any;
 
     if (!session) {
@@ -34,70 +32,64 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!session.cliente_id) {
+    if (String(session.status) !== "active") {
       return NextResponse.json(
-        { ok: false, error: "Sessão sem cliente associado." },
+        { ok: false, error: "Sessão não está ativa.", code: "SESSION_NOT_ACTIVE" },
         { status: 400 }
       );
     }
 
-    if (!session.consultor_id) {
+    if (!session.cliente_id || !session.consultor_id) {
       return NextResponse.json(
-        { ok: false, error: "Sessão sem consultor associado." },
-        { status: 400 }
-      );
-    }
-
-    if (session.status === "ended") {
-      return NextResponse.json(
-        { ok: false, error: "A sessão já terminou." },
+        { ok: false, error: "Sessão incompleta." },
         { status: 400 }
       );
     }
 
     const consultor = db
-      .prepare(
-        `
-        SELECT percentagem_ganho
-        FROM consultores
-        WHERE id = ?
-        `
-      )
+      .prepare(`SELECT percentagem_ganho FROM consultores WHERE id = ?`)
       .get(session.consultor_id) as any;
 
     const percentagem = round2(Number(consultor?.percentagem_ganho ?? 40));
     const pricePerMin = Number(session.price_per_min || 0);
+    const pricePerSecond = round4(pricePerMin / 60);
 
-    if (pricePerMin <= 0) {
+    if (pricePerMin <= 0 || pricePerSecond <= 0) {
       return NextResponse.json(
-        { ok: false, error: "Preço por minuto inválido." },
+        { ok: false, error: "Preço inválido." },
         { status: 400 }
       );
     }
 
     const now = Math.floor(Date.now() / 1000);
+    const startedAt = Number(session.started_at || now);
     const alreadyBilledSeconds = Number(session.billed_seconds || 0);
 
-    // Cobrança fixa: 1 minuto por cada chamada a esta rota
-    const billedThisCallSeconds = 60;
-    const amountToCharge = round2(pricePerMin);
+    const elapsedSeconds = Math.max(0, now - startedAt);
+    const secondsToBill = Math.max(0, elapsedSeconds - alreadyBilledSeconds);
 
-    if (amountToCharge <= 0) {
+    if (secondsToBill <= 0) {
+      const clienteWallet = getOrCreateWallet("cliente", Number(session.cliente_id));
+      const balance = round4(Number(clienteWallet.balance_eur || 0));
+
       return NextResponse.json({
         ok: true,
         charged: 0,
-        wallet_balance: null,
+        charged_seconds: 0,
+        wallet_balance: balance,
         billed_seconds: alreadyBilledSeconds,
-        total_charged_eur: Number(session.total_charged_eur || 0),
-        consultor_earned_eur: Number(session.consultor_earned_eur || 0),
-        message: "Valor calculado igual a zero.",
+        total_charged_eur: round4(Number(session.total_charged_eur || 0)),
+        consultor_earned_eur: round4(Number(session.consultor_earned_eur || 0)),
+        remaining_seconds: Math.floor(balance / pricePerSecond),
       });
     }
 
-    const clienteWallet = getOrCreateWallet("cliente", Number(session.cliente_id));
-    const currentClientBalance = round2(Number(clienteWallet.balance_eur || 0));
+    const amountToCharge = round4(secondsToBill * pricePerSecond);
 
-    if (currentClientBalance < amountToCharge) {
+    const clienteWallet = getOrCreateWallet("cliente", Number(session.cliente_id));
+    const currentClientBalance = round4(Number(clienteWallet.balance_eur || 0));
+
+    if (currentClientBalance <= 0 || currentClientBalance < amountToCharge) {
       db.prepare(
         `
         UPDATE chat_sessions
@@ -124,14 +116,14 @@ export async function POST(req: Request) {
       const freshClientWallet = getOrCreateWallet("cliente", Number(session.cliente_id));
       const freshConsultorWallet = getOrCreateWallet("consultor", Number(session.consultor_id));
 
-      const clientBalanceNow = round2(Number(freshClientWallet.balance_eur || 0));
+      const clientBalanceNow = round4(Number(freshClientWallet.balance_eur || 0));
 
       if (clientBalanceNow < amountToCharge) {
         throw new Error("Saldo insuficiente.");
       }
 
-      const newClientBalance = round2(clientBalanceNow - amountToCharge);
-      const newClientSpent = round2(Number(freshClientWallet.spent_eur || 0) + amountToCharge);
+      const newClientBalance = round4(clientBalanceNow - amountToCharge);
+      const newClientSpent = round4(Number(freshClientWallet.spent_eur || 0) + amountToCharge);
 
       db.prepare(
         `
@@ -147,19 +139,20 @@ export async function POST(req: Request) {
         `
         INSERT INTO wallet_transactions (
           wallet_id, session_id, type, amount_eur, description
-        ) VALUES (?, ?, 'debit', ?, ?)
+        )
+        VALUES (?, ?, 'debit', ?, ?)
         `
       ).run(
         freshClientWallet.id,
         sessionId,
-        round2(-amountToCharge),
-        `Cobrança chat sessão ${sessionId}`
+        round4(-amountToCharge),
+        `Cobrança chat ${secondsToBill}s sessão ${sessionId}`
       );
 
-      const consultorShare = round2(amountToCharge * (percentagem / 100));
+      const consultorShare = round4(amountToCharge * (percentagem / 100));
 
-      const consultorBalanceNow = round2(Number(freshConsultorWallet.balance_eur || 0));
-      const consultorEarnedNow = round2(Number(freshConsultorWallet.earned_eur || 0));
+      const consultorBalanceNow = round4(Number(freshConsultorWallet.balance_eur || 0));
+      const consultorEarnedNow = round4(Number(freshConsultorWallet.earned_eur || 0));
 
       db.prepare(
         `
@@ -170,8 +163,8 @@ export async function POST(req: Request) {
         WHERE id = ?
         `
       ).run(
-        round2(consultorBalanceNow + consultorShare),
-        round2(consultorEarnedNow + consultorShare),
+        round4(consultorBalanceNow + consultorShare),
+        round4(consultorEarnedNow + consultorShare),
         freshConsultorWallet.id
       );
 
@@ -179,18 +172,19 @@ export async function POST(req: Request) {
         `
         INSERT INTO wallet_transactions (
           wallet_id, session_id, type, amount_eur, description
-        ) VALUES (?, ?, 'consultor_earned', ?, ?)
+        )
+        VALUES (?, ?, 'consultor_earned', ?, ?)
         `
       ).run(
         freshConsultorWallet.id,
         sessionId,
         consultorShare,
-        `Ganho do consultor na sessão ${sessionId}`
+        `Ganho consultor chat ${secondsToBill}s sessão ${sessionId}`
       );
 
-      const newBilledSeconds = alreadyBilledSeconds + billedThisCallSeconds;
-      const newTotalCharged = round2(Number(session.total_charged_eur || 0) + amountToCharge);
-      const newConsultorEarnedSession = round2(
+      const newBilledSeconds = alreadyBilledSeconds + secondsToBill;
+      const newTotalCharged = round4(Number(session.total_charged_eur || 0) + amountToCharge);
+      const newConsultorEarnedSession = round4(
         Number(session.consultor_earned_eur || 0) + consultorShare
       );
 
@@ -200,22 +194,25 @@ export async function POST(req: Request) {
         SET billed_seconds = ?,
             total_charged_eur = ?,
             consultor_earned_eur = ?,
-            started_at = COALESCE(started_at, strftime('%s','now'))
+            started_at = COALESCE(started_at, ?)
         WHERE id = ?
         `
       ).run(
         newBilledSeconds,
         newTotalCharged,
         newConsultorEarnedSession,
+        startedAt,
         sessionId
       );
 
       return {
         charged: amountToCharge,
+        charged_seconds: secondsToBill,
         wallet_balance: newClientBalance,
         billed_seconds: newBilledSeconds,
         total_charged_eur: newTotalCharged,
         consultor_earned_eur: newConsultorEarnedSession,
+        remaining_seconds: Math.floor(newClientBalance / pricePerSecond),
       };
     })();
 
@@ -228,7 +225,7 @@ export async function POST(req: Request) {
 
     if (String(e?.message || "").includes("Saldo insuficiente")) {
       return NextResponse.json(
-        { ok: false, error: "Saldo insuficiente." },
+        { ok: false, error: "Saldo insuficiente.", code: "INSUFFICIENT_BALANCE" },
         { status: 402 }
       );
     }
