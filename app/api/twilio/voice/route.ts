@@ -33,9 +33,10 @@ export async function POST(req: Request) {
     const callSessionId = String(searchParams.get("callSessionId") || "").trim();
     const maxSeconds = Number(searchParams.get("maxSeconds") || 0);
 
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
     const twilioPhoneNumber = normPhone(process.env.TWILIO_PHONE_NUMBER);
 
-    if (!twilioPhoneNumber || !twilioPhoneNumber.startsWith("+")) {
+    if (!siteUrl || !twilioPhoneNumber.startsWith("+")) {
       return xml(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say language="pt">Configuração da chamada incompleta.</Say>
@@ -62,16 +63,8 @@ export async function POST(req: Request) {
       )
       .get(clienteId) as any;
 
-    if (!cliente?.telefone) {
-      return xml(`<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say language="pt">O número do cliente não está disponível.</Say>
-  <Hangup/>
-</Response>`);
-    }
-
-    const clienteNome = escapeXml(cliente.nome || "Cliente");
-    const clienteTelefone = normPhone(cliente.telefone);
+    const clienteTelefone = normPhone(cliente?.telefone);
+    const clienteNome = escapeXml(cliente?.nome || "Cliente");
 
     if (!clienteTelefone.startsWith("+")) {
       return xml(`<?xml version="1.0" encoding="UTF-8"?>
@@ -81,13 +74,29 @@ export async function POST(req: Request) {
 </Response>`);
     }
 
+    const statusUrl =
+      `${siteUrl}/api/twilio/status` +
+      `?consultorId=${consultorId}` +
+      `&clienteId=${clienteId}` +
+      `&callSessionId=${encodeURIComponent(callSessionId)}`;
+
     const timeLimitAttr = maxSeconds > 0 ? ` timeLimit="${maxSeconds}"` : "";
 
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say language="pt">Nova consulta SacraLuna.</Say>
   <Say language="pt">A ligar ao cliente ${clienteNome}.</Say>
-  <Dial callerId="${twilioPhoneNumber}" answerOnBridge="true" timeout="20"${timeLimitAttr}>
+
+  <Dial
+    callerId="${twilioPhoneNumber}"
+    answerOnBridge="true"
+    timeout="20"
+    record="record-from-answer"
+    recordingStatusCallback="${statusUrl}"
+    recordingStatusCallbackMethod="POST"
+    action="${statusUrl}"
+    method="POST"${timeLimitAttr}
+  >
     ${clienteTelefone}
   </Dial>
 </Response>`;
