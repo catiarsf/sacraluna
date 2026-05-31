@@ -28,6 +28,16 @@ type PendingChat = {
   created_at: number;
 } | null;
 
+type PendingEmailPedido = {
+  id: string;
+  cliente_nome: string;
+  cliente_email: string;
+  pacote: number;
+  preco_eur: number;
+  status: string;
+  created_at: number;
+} | null;
+
 export default function ConsultorPage() {
   const router = useRouter();
 
@@ -46,7 +56,11 @@ export default function ConsultorPage() {
 
   const [pendingChat, setPendingChat] = useState<PendingChat>(null);
   const [responding, setResponding] = useState(false);
+
   const [pendingEmails, setPendingEmails] = useState(0);
+  const [pendingEmailPedido, setPendingEmailPedido] =
+    useState<PendingEmailPedido>(null);
+  const [respondingEmail, setRespondingEmail] = useState(false);
 
   const alertAudioRef = useRef<HTMLAudioElement | null>(null);
   const lastAlertedSessionRef = useRef<string>("");
@@ -100,9 +114,7 @@ export default function ConsultorPage() {
 
       const json = await res.json().catch(() => ({}));
 
-      if (!res.ok || !json?.ok) {
-        return;
-      }
+      if (!res.ok || !json?.ok) return;
 
       const nextPending = json?.pending ?? null;
       setPendingChat(nextPending);
@@ -139,9 +151,17 @@ export default function ConsultorPage() {
       if (!res.ok || !json?.ok) return;
 
       const pedidos = Array.isArray(json?.pedidos) ? json.pedidos : [];
+
+      const aguardaAceitacao = pedidos.find(
+        (p: any) => String(p?.status ?? "") === "aguarda_aceitacao"
+      );
+
+      setPendingEmailPedido(aguardaAceitacao || null);
+
       const pendentes = pedidos.filter(
         (p: any) => String(p?.status ?? "") !== "respondido"
       );
+
       const totalPendentes = pendentes.length;
 
       if (!emailsInitializedRef.current) {
@@ -329,6 +349,46 @@ export default function ConsultorPage() {
     }
   }
 
+  async function responderEmailPedido(action: "accept" | "reject") {
+    if (!pendingEmailPedido?.id) return;
+
+    try {
+      setRespondingEmail(true);
+      setErro("");
+
+      const res = await fetch("/api/consultor/emails/respond", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pedido_id: pendingEmailPedido.id,
+          action,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Erro ao responder ao pedido de email.");
+      }
+
+      if (action === "reject") {
+        alert("Pedido de email rejeitado.");
+      } else {
+        alert("Pedido de email aceite.");
+      }
+
+      setPendingEmailPedido(null);
+      await verificarEmailsPendentes();
+      await carregarDados();
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao responder ao pedido de email.");
+    } finally {
+      setRespondingEmail(false);
+    }
+  }
+
   const ganhosHoje = Number(walletData?.stats?.ganhos_hoje_eur ?? 0);
   const saldoParaLevantamento = Number(walletData?.wallet?.balance_eur ?? 0);
   const consultasHoje = Number(walletData?.stats?.consultas_hoje ?? 0);
@@ -354,26 +414,77 @@ export default function ConsultorPage() {
       {pendingChat && online && !ocupado && (
         <div style={styles.pendingBox}>
           <div style={styles.pendingTitle}>Novo pedido de chat</div>
+
           <div style={styles.pendingText}>
             <b>Cliente:</b> {pendingChat.cliente_nome}
           </div>
+
           <div style={styles.pendingText}>
             <b>Preço:</b> {Number(pendingChat.price_per_min ?? 0).toFixed(2)}€/min
           </div>
+
           <div style={styles.pendingBtns}>
             <button
               style={styles.acceptBtn}
               onClick={() => responderPedido("accept")}
               disabled={responding}
             >
-              Aceitar
+              {responding ? "A processar..." : "Aceitar chat"}
             </button>
+
             <button
               style={styles.rejectBtn}
               onClick={() => responderPedido("reject")}
               disabled={responding}
             >
-              Rejeitar
+              {responding ? "A processar..." : "Rejeitar chat"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pendingEmailPedido && (
+        <div style={styles.pendingBox}>
+          <div style={styles.pendingTitle}>Novo pedido por email</div>
+
+          <div style={styles.pendingText}>
+            <b>Cliente:</b> {pendingEmailPedido.cliente_nome || "Cliente"}
+          </div>
+
+          <div style={styles.pendingText}>
+            <b>Email:</b> {pendingEmailPedido.cliente_email || "-"}
+          </div>
+
+          <div style={styles.pendingText}>
+            <b>Pacote:</b> {pendingEmailPedido.pacote} pergunta(s)
+          </div>
+
+          <div style={styles.pendingText}>
+            <b>Valor:</b> {Number(pendingEmailPedido.preco_eur ?? 0).toFixed(2)}€
+          </div>
+
+          <div style={styles.pendingBtns}>
+            <button
+              style={styles.acceptBtn}
+              onClick={() => responderEmailPedido("accept")}
+              disabled={respondingEmail}
+            >
+              {respondingEmail ? "A processar..." : "Aceitar email"}
+            </button>
+
+            <button
+              style={styles.rejectBtn}
+              onClick={() => responderEmailPedido("reject")}
+              disabled={respondingEmail}
+            >
+              {respondingEmail ? "A processar..." : "Rejeitar email"}
+            </button>
+
+            <button
+              style={styles.alertBtn}
+              onClick={() => router.push("/consultor/historico-email")}
+            >
+              Ver detalhes
             </button>
           </div>
         </div>
@@ -415,40 +526,25 @@ export default function ConsultorPage() {
             {alertasAtivos ? "🔔 Alertas ativos" : "🔔 Ativar alertas"}
           </button>
 
-          <button
-            style={styles.alertBtn}
-            onClick={() => router.push("/consultor/perfil")}
-          >
+          <button style={styles.alertBtn} onClick={() => router.push("/consultor/perfil")}>
             Editar perfil
           </button>
 
-          <button
-            style={styles.alertBtn}
-            onClick={() => router.push("/consultor/historico-chat")}
-          >
+          <button style={styles.alertBtn} onClick={() => router.push("/consultor/historico-chat")}>
             Histórico chat
           </button>
 
-          <button
-            style={styles.alertBtn}
-            onClick={() => router.push("/consultor/historico-email")}
-          >
+          <button style={styles.alertBtn} onClick={() => router.push("/consultor/historico-email")}>
             Histórico email {pendingEmails > 0 ? `(${pendingEmails})` : ""}
           </button>
 
-          <button
-            style={styles.alertBtn}
-            onClick={() => router.push("/consultor/chamadas")}
-          >
+          <button style={styles.alertBtn} onClick={() => router.push("/consultor/chamadas")}>
             Histórico voz
           </button>
-        
-         <button
-  style={styles.alertBtn}
-  onClick={() => router.push("/consultor/tickets")}
->
-  📦 Serviços / Tickets
-</button>
+
+          <button style={styles.alertBtn} onClick={() => router.push("/consultor/tickets")}>
+            📦 Serviços / Tickets
+          </button>
 
           <button style={styles.logoutBtn} onClick={terminarSessao}>
             Terminar sessão
@@ -498,16 +594,8 @@ const styles: Record<string, React.CSSProperties> = {
     background:
       "radial-gradient(1100px 650px at 50% 75%, rgba(25,70,140,0.55) 0%, rgba(10,16,28,1) 55%)",
   },
-  h1: {
-    fontSize: 34,
-    fontWeight: 900,
-    marginBottom: 18,
-  },
-  h2: {
-    fontSize: 22,
-    fontWeight: 800,
-    marginBottom: 10,
-  },
+  h1: { fontSize: 34, fontWeight: 900, marginBottom: 18 },
+  h2: { fontSize: 22, fontWeight: 800, marginBottom: 10 },
   pendingBox: {
     padding: 18,
     borderRadius: 16,
@@ -522,16 +610,8 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#f4d78b",
     marginBottom: 10,
   },
-  pendingText: {
-    marginBottom: 8,
-    fontSize: 16,
-  },
-  pendingBtns: {
-    display: "flex",
-    gap: 12,
-    flexWrap: "wrap",
-    marginTop: 14,
-  },
+  pendingText: { marginBottom: 8, fontSize: 16 },
+  pendingBtns: { display: "flex", gap: 12, flexWrap: "wrap", marginTop: 14 },
   acceptBtn: {
     padding: "12px 18px",
     borderRadius: 12,
@@ -561,27 +641,10 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.08)",
     marginBottom: 18,
   },
-  subtle: {
-    opacity: 0.75,
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  name: {
-    fontSize: 28,
-    fontWeight: 900,
-    color: "#f4d78b",
-  },
-  statusLine: {
-    marginTop: 10,
-    fontWeight: 900,
-    fontSize: 16,
-  },
-  headerButtons: {
-    display: "flex",
-    gap: 10,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
+  subtle: { opacity: 0.75, fontSize: 14, marginBottom: 4 },
+  name: { fontSize: 28, fontWeight: 900, color: "#f4d78b" },
+  statusLine: { marginTop: 10, fontWeight: 900, fontSize: 16 },
+  headerButtons: { display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" },
   onlineBtn: {
     padding: "10px 14px",
     borderRadius: 10,
@@ -639,29 +702,14 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(0,0,0,0.25)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
-  cardLabel: {
-    opacity: 0.8,
-    marginBottom: 8,
-    fontWeight: 700,
-  },
-  cardValue: {
-    fontSize: 28,
-    fontWeight: 900,
-    color: "#f4d78b",
-  },
+  cardLabel: { opacity: 0.8, marginBottom: 8, fontWeight: 700 },
+  cardValue: { fontSize: 28, fontWeight: 900, color: "#f4d78b" },
   noteCard: {
     padding: 18,
     borderRadius: 16,
     background: "rgba(0,0,0,0.25)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
-  noteText: {
-    lineHeight: 1.6,
-    opacity: 0.92,
-  },
-  error: {
-    color: "#ff8080",
-    fontWeight: 700,
-    marginBottom: 14,
-  },
+  noteText: { lineHeight: 1.6, opacity: 0.92 },
+  error: { color: "#ff8080", fontWeight: 700, marginBottom: 14 },
 };
