@@ -26,8 +26,7 @@ export async function GET() {
         online,
         ocupado
       FROM consultores
-      WHERE ativo = 1
-        AND online = 1
+      WHERE online = 1
       ORDER BY nome ASC
     `).all();
 
