@@ -291,6 +291,13 @@ export default function ClientePage() {
         >
           📦 Os meus serviços
         </button>
+
+        <button
+  style={styles.quickButton}
+  onClick={() => router.push("/cliente/consultores")}
+>
+  🔮 Consultores Online
+</button>
       </div>
 
       <div style={styles.card}>

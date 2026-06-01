@@ -1,6 +1,9 @@
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import  db  from "@/lib/db";
+import db from "@/lib/db";
 import { getSession } from "@/lib/auth";
 
 type UserRow = {
@@ -13,7 +16,7 @@ type UserRow = {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
 
     const email = String(body?.email ?? "").trim().toLowerCase();
     const password = String(body?.password ?? "");
@@ -31,6 +34,7 @@ export async function POST(req: Request) {
         SELECT id, role, nome, email, password_hash
         FROM users
         WHERE lower(email) = ?
+        LIMIT 1
         `
       )
       .get(email) as UserRow | undefined;
@@ -42,9 +46,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const ok = await bcrypt.compare(password, user.password_hash);
+    const passwordOk = await bcrypt.compare(password, user.password_hash);
 
-    if (!ok) {
+    if (!passwordOk) {
       return NextResponse.json(
         { ok: false, error: "Credenciais inválidas." },
         { status: 401 }
@@ -52,12 +56,14 @@ export async function POST(req: Request) {
     }
 
     const session = await getSession();
+
     session.user = {
       id: user.id,
       role: user.role,
       nome: user.nome,
       email: user.email,
     };
+
     await session.save();
 
     return NextResponse.json({
@@ -66,8 +72,12 @@ export async function POST(req: Request) {
     });
   } catch (err: any) {
     console.error("ERRO /api/login:", err);
+
     return NextResponse.json(
-      { ok: false, error: err?.message || "Erro interno do servidor." },
+      {
+        ok: false,
+        error: err?.message || "Erro interno do servidor.",
+      },
       { status: 500 }
     );
   }
