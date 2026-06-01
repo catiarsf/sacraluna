@@ -19,7 +19,6 @@ export async function GET() {
       SELECT
         id,
         nome,
-        foto,
         especialidades,
         preco_chat,
         preco_voz,
