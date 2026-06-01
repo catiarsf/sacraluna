@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { db } from "@/lib/db";
+import  db  from "@/lib/db";
 import { getSession } from "@/lib/auth";
 
 type UserRow = {
