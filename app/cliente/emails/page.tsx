@@ -31,12 +31,18 @@ function statusLabel(status: string) {
   switch (status) {
     case "aguarda_pagamento":
       return "Aguarda pagamento";
+    case "aguarda_aceitacao":
+      return "Aguarda aceitação da consultora";
     case "aguarda_resposta":
       return "Aguarda resposta";
     case "em_resposta":
       return "Em resposta";
     case "respondido":
       return "Respondido";
+    case "rejeitado":
+      return "Rejeitado pela consultora";
+    case "cancelado_cliente":
+      return "Cancelado pelo cliente";
     default:
       return status || "-";
   }
@@ -47,6 +53,7 @@ export default function ClienteEmailsPage() {
   const [erro, setErro] = useState("");
   const [pedidos, setPedidos] = useState<ClientePedido[]>([]);
   const [expandedId, setExpandedId] = useState("");
+  const [cancelandoId, setCancelandoId] = useState("");
 
   async function carregar() {
     try {
@@ -76,6 +83,42 @@ export default function ClienteEmailsPage() {
     }
   }
 
+  async function cancelarPedido(pedidoId: string) {
+    const confirmar = confirm(
+      "Tens a certeza que queres cancelar este pedido? Só podes cancelar pedidos que ainda não foram aceites pela consultora."
+    );
+
+    if (!confirmar) return;
+
+    try {
+      setCancelandoId(pedidoId);
+      setErro("");
+
+      const res = await fetch("/api/cliente/emails/cancelar", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pedido_id: pedidoId,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "Erro ao cancelar pedido.");
+      }
+
+      alert("Pedido cancelado com sucesso.");
+      await carregar();
+    } catch (e: any) {
+      setErro(e?.message || "Erro ao cancelar pedido.");
+    } finally {
+      setCancelandoId("");
+    }
+  }
+
   useEffect(() => {
     carregar();
   }, []);
@@ -101,37 +144,46 @@ export default function ClienteEmailsPage() {
       {loading ? (
         <div style={styles.card}>A carregar...</div>
       ) : pedidos.length === 0 ? (
-        <div style={styles.card}>
-          Ainda não tens consultas por email.
-        </div>
+        <div style={styles.card}>Ainda não tens consultas por email.</div>
       ) : (
         <div style={styles.list}>
           {pedidos.map((pedido) => {
             const expanded = expandedId === pedido.id;
+
             const podeEditarPerguntas =
               pedido.status === "aguarda_pagamento" ||
-              pedido.status === "aguarda_resposta";
+              pedido.status === "aguarda_aceitacao";
+
+            const podeCancelar =
+              pedido.status === "aguarda_pagamento" ||
+              pedido.status === "aguarda_aceitacao";
 
             return (
               <div key={pedido.id} style={styles.card}>
                 <div style={styles.headerCard}>
                   <div>
                     <div style={styles.title}>Consulta por email</div>
+
                     <div style={styles.meta}>
                       <b>Consultora:</b> {pedido.consultor_nome || "-"}
                     </div>
+
                     <div style={styles.meta}>
                       <b>Pacote:</b> {pedido.pacote} pergunta(s)
                     </div>
+
                     <div style={styles.meta}>
                       <b>Preço:</b> {Number(pedido.preco_eur ?? 0).toFixed(2)}€
                     </div>
+
                     <div style={styles.meta}>
                       <b>Status:</b> {statusLabel(pedido.status)}
                     </div>
+
                     <div style={styles.meta}>
                       <b>Criado:</b> {formatDateTime(pedido.created_at)}
                     </div>
+
                     <div style={styles.meta}>
                       <b>Respondido:</b> {formatDateTime(pedido.respondido_at)}
                     </div>
@@ -153,6 +205,18 @@ export default function ClienteEmailsPage() {
                         Editar perguntas
                       </Link>
                     ) : null}
+
+                    {podeCancelar ? (
+                      <button
+                        style={styles.cancelBtn}
+                        onClick={() => cancelarPedido(pedido.id)}
+                        disabled={cancelandoId === pedido.id}
+                      >
+                        {cancelandoId === pedido.id
+                          ? "A cancelar..."
+                          : "Cancelar pedido"}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 
@@ -162,7 +226,8 @@ export default function ClienteEmailsPage() {
                       pedido.itens.map((it, index) => (
                         <div key={it.id} style={styles.message}>
                           <div style={styles.messageRole}>
-                            Pergunta {index + 1} enviada em {formatDateTime(it.created_at)}
+                            Pergunta {index + 1} enviada em{" "}
+                            {formatDateTime(it.created_at)}
                           </div>
 
                           <div style={styles.block}>
@@ -177,12 +242,15 @@ export default function ClienteEmailsPage() {
                           </div>
 
                           <div style={styles.messageFoot}>
-                            <b>Data da resposta:</b> {formatDateTime(it.responded_at)}
+                            <b>Data da resposta:</b>{" "}
+                            {formatDateTime(it.responded_at)}
                           </div>
                         </div>
                       ))
                     ) : (
-                      <div style={styles.meta}>Ainda não há perguntas nesta consulta.</div>
+                      <div style={styles.meta}>
+                        Ainda não há perguntas nesta consulta.
+                      </div>
                     )}
                   </div>
                 )}
@@ -203,6 +271,7 @@ const styles: Record<string, React.CSSProperties> = {
     background:
       "radial-gradient(1100px 650px at 50% 75%, rgba(25,70,140,0.55) 0%, rgba(10,16,28,1) 55%)",
   },
+
   topRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -211,16 +280,19 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
     marginBottom: 18,
   },
+
   h1: {
     fontSize: 32,
     fontWeight: 900,
     margin: 0,
   },
+
   actions: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
   },
+
   linkBtn: {
     padding: "11px 14px",
     borderRadius: 12,
@@ -230,6 +302,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     textDecoration: "none",
   },
+
   btn: {
     padding: "11px 14px",
     borderRadius: 12,
@@ -240,6 +313,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
+
   btnSmall: {
     padding: "8px 10px",
     borderRadius: 10,
@@ -249,6 +323,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     cursor: "pointer",
   },
+
   linkSmallBtn: {
     padding: "8px 10px",
     borderRadius: 10,
@@ -261,6 +336,17 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
   },
+
+  cancelBtn: {
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,100,100,0.55)",
+    background: "rgba(150,20,20,0.35)",
+    color: "#ffd6d6",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+
   err: {
     marginBottom: 12,
     padding: 12,
@@ -269,16 +355,19 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,0,0,0.25)",
     whiteSpace: "pre-wrap",
   },
+
   list: {
     display: "grid",
     gap: 14,
   },
+
   card: {
     padding: 18,
     borderRadius: 16,
     background: "rgba(0,0,0,0.25)",
     border: "1px solid rgba(255,255,255,0.08)",
   },
+
   headerCard: {
     display: "flex",
     justifyContent: "space-between",
@@ -286,16 +375,19 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
     flexWrap: "wrap",
   },
+
   title: {
     fontSize: 18,
     fontWeight: 900,
     color: "#f4d78b",
     marginBottom: 8,
   },
+
   meta: {
     marginBottom: 6,
     opacity: 0.92,
   },
+
   transcript: {
     marginTop: 14,
     paddingTop: 14,
@@ -303,23 +395,27 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gap: 10,
   },
+
   message: {
     borderRadius: 12,
     padding: 12,
     background: "rgba(0,0,0,0.18)",
     border: "1px solid rgba(255,255,255,0.06)",
   },
+
   messageRole: {
     fontSize: 12,
     fontWeight: 900,
     opacity: 0.85,
     marginBottom: 8,
   },
+
   block: {
     marginBottom: 8,
     whiteSpace: "pre-wrap",
     lineHeight: 1.5,
   },
+
   messageFoot: {
     opacity: 0.8,
     fontSize: 13,
