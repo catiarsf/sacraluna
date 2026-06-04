@@ -113,7 +113,7 @@ export default function EmailConsultorPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          pedido_id: pedido.pedido_id,
+          pedidoid: pedido.pedido_id,
           preco,
           consultor_id: consultorId,
         }),
