@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const pedidoId = String(body?.pedidoId ?? "").trim();
+   const pedidoId = String(body?.pedidoId ?? body?.pedido_id ?? "").trim();
 
     if (!pedidoId) {
       return NextResponse.json(
