@@ -7,16 +7,12 @@ type Consultor = {
   id: number;
   nome: string;
   foto_url: string | null;
-
   pack_1_qtd: number;
   pack_1_preco: number;
-
   pack_2_qtd: number;
   pack_2_preco: number;
-
   pack_3_qtd: number;
   pack_3_preco: number;
-
   pack_4_qtd: number;
   pack_4_preco: number;
 };
@@ -25,7 +21,11 @@ export default function EmailConsultorPage() {
   const params = useParams();
   const router = useRouter();
 
-  const consultorId = Number(params?.id);
+  const rawId = Array.isArray((params as any)?.id)
+    ? (params as any).id[0]
+    : (params as any)?.id;
+
+  const consultorId = Number(rawId);
 
   const [consultor, setConsultor] = useState<Consultor | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,12 +33,25 @@ export default function EmailConsultorPage() {
   useEffect(() => {
     async function carregar() {
       try {
-        const res = await fetch('/api/consultores/${consultorId}', {
+        const res = await fetch(`/api/consultores/${consultorId}`, {
           cache: "no-store",
         });
 
         const data = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          alert(data?.error || "Erro ao carregar consultor.");
+          router.push("/");
+          return;
+        }
+
         const c = data?.consultor ?? data;
+
+        if (!c?.id) {
+          alert("Consultor inválido.");
+          router.push("/");
+          return;
+        }
 
         setConsultor({
           id: Number(c?.id ?? 0),
@@ -59,11 +72,17 @@ export default function EmailConsultorPage() {
         });
       } catch {
         alert("Erro ao carregar consultor.");
+        router.push("/");
       }
     }
 
-    if (consultorId) carregar();
-  }, [consultorId]);
+    if (Number.isFinite(consultorId) && consultorId > 0) {
+      carregar();
+    } else {
+      alert("Consultor inválido.");
+      router.push("/");
+    }
+  }, [consultorId, router]);
 
   async function comprarPack(pacote: number, preco: number) {
     try {
@@ -103,7 +122,6 @@ export default function EmailConsultorPage() {
       const pagamento = await stripe.json().catch(() => ({}));
 
       if (!stripe.ok || !pagamento?.url) {
-        console.log("ERRO CHECKOUT:", pagamento);
         alert(pagamento?.error || "Erro ao iniciar pagamento.");
         return;
       }

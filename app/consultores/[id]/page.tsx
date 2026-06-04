@@ -322,14 +322,11 @@ export default function ConsultorPerfilPage() {
     }
   }
 
-  function irParaEmail() {
-    if (!consultor) return;
-    router.push(`/consultores/${consultor.id}?origem=loja&servico=${servicoId || ""}`);
-    alert(
-      "Para pedidos sob consulta, usa preferencialmente o chat com a consultora. Se ela estiver indisponível, podes voltar mais tarde ou contactar pelos meios disponíveis no site."
-    );
-  }
-
+function irParaEmail() {
+  if (!consultor) return;
+  router.push(`/email/${consultor.id}`);
+}
+  
   return (
     <div style={styles.page}>
       <div style={styles.wrap}>
