@@ -54,21 +54,21 @@ export default function EmailConsultorPage() {
         }
 
         setConsultor({
-          id: Number(c?.id ?? 0),
-          nome: String(c?.nome ?? ""),
-          foto_url: c?.foto_url ?? null,
+          id: Number(c.id ?? 0),
+          nome: String(c.nome ?? ""),
+          foto_url: c.foto_url ?? null,
 
-          pack_1_qtd: Number(c?.pack_1_qtd ?? 1),
-          pack_1_preco: Number(c?.pack_1_preco ?? 1),
+          pack_1_qtd: Number(c.pack_1_qtd ?? 1),
+          pack_1_preco: Number(c.pack_1_preco ?? 1),
 
-          pack_2_qtd: Number(c?.pack_2_qtd ?? 3),
-          pack_2_preco: Number(c?.pack_2_preco ?? 3),
+          pack_2_qtd: Number(c.pack_2_qtd ?? 3),
+          pack_2_preco: Number(c.pack_2_preco ?? 3),
 
-          pack_3_qtd: Number(c?.pack_3_qtd ?? 5),
-          pack_3_preco: Number(c?.pack_3_preco ?? 5),
+          pack_3_qtd: Number(c.pack_3_qtd ?? 5),
+          pack_3_preco: Number(c.pack_3_preco ?? 5),
 
-          pack_4_qtd: Number(c?.pack_4_qtd ?? 10),
-          pack_4_preco: Number(c?.pack_4_preco ?? 10),
+          pack_4_qtd: Number(c.pack_4_qtd ?? 10),
+          pack_4_preco: Number(c.pack_4_preco ?? 10),
         });
       } catch {
         alert("Erro ao carregar consultor.");
@@ -107,13 +107,18 @@ export default function EmailConsultorPage() {
         return;
       }
 
+      if (!pedido?.pedido_id) {
+        alert("Pedido inválido: pedido_id não foi criado.");
+        return;
+      }
+
       const stripe = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          pedidoid: pedido.pedido_id,
+          pedidoId: pedido.pedido_id,
           preco,
           consultor_id: consultorId,
         }),
