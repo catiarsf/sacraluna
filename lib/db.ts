@@ -2,20 +2,27 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+
 const basePath =
   process.env.SQLITE_DIR ||
   process.env.RAILWAY_VOLUME_MOUNT_PATH ||
   (process.env.NODE_ENV === "production" ? "/data" : process.cwd());
 
-if (!fs.existsSync(basePath)) {
-  fs.mkdirSync(basePath, { recursive: true });
+let dbPath = ":memory:";
+if (!isBuildPhase) {
+  if (!fs.existsSync(basePath)) {
+    fs.mkdirSync(basePath, { recursive: true });
+  }
+  dbPath = path.join(basePath, "data.sqlite");
 }
 
-const dbPath = path.join(basePath, "data.sqlite");
 const db = new Database(dbPath);
 
-db.pragma("journal_mode = WAL");
 db.pragma("busy_timeout = 5000");
+if (!isBuildPhase) {
+  db.pragma("journal_mode = WAL");
+}
 db.pragma("foreign_keys = ON");
 
 db.exec(`
